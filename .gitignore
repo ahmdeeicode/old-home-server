@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+# secrets never live in the repo — only encrypted bundles in Releases
+*.pem
+*.key
+*.hash
+cloudflared/*.json
+state.json
+aapanel_api.json

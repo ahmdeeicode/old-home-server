@@ -1,0 +1,230 @@
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json", "X-OldHome": "1" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    credentials: "same-origin",
+  });
+  const data = await res.json().catch(() => ({ error: "رد غير متوقع من الخادم" }));
+  if (res.status === 401 && path !== "/api/login") { showLogin(); throw new Error("سجّل الدخول"); }
+  if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function toast(msg, bad = false) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = bad ? "bad" : ""; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 4000);
+}
+
+async function busy(btn, fn) {
+  btn.disabled = true;
+  try { return await fn(); } finally { btn.disabled = false; }
+}
+
+const fmtBytes = (b) => { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return b.toFixed(i ? 1 : 0) + " " + u[i]; };
+const fmtUptime = (s) => { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return (d ? d + " يوم " : "") + h + " س " + m + " د"; };
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+// ---------- auth ----------
+function showLogin() { $("#app").hidden = true; $("#login").hidden = false; $("#login-pw").focus(); }
+function showApp() { $("#login").hidden = true; $("#app").hidden = false; switchTab(location.hash.slice(1) || "dash"); }
+
+$("#login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#login-err").hidden = true;
+  try { await api("/api/login", { method: "POST", body: { password: $("#login-pw").value } }); $("#login-pw").value = ""; showApp(); }
+  catch (err) { $("#login-err").textContent = err.message; $("#login-err").hidden = false; }
+});
+$("#logout").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); showLogin(); });
+
+// ---------- tabs ----------
+let refreshTimer;
+function switchTab(tab) {
+  if (!$(`[data-pane="${tab}"]`)) tab = "dash";
+  $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== tab));
+  history.replaceState(null, "", "#" + tab);
+  clearInterval(refreshTimer);
+  ({ dash: loadDash, sites: loadSites, logs: loadLogSources, settings: loadSettings })[tab]();
+  if (tab === "dash") refreshTimer = setInterval(loadDash, 5000);
+}
+$$("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+// ---------- dashboard ----------
+async function loadDash() {
+  let d;
+  try { d = await api("/api/overview"); } catch (e) { return toast(e.message, true); }
+  const s = d.stats;
+  $("#hostname").textContent = "· " + s.hostname;
+  const tile = (label, value, sub, p) => `<div class="card stat"><div class="muted small">${label}</div><div class="v">${value}</div>
+    <div class="muted small">${sub}</div>${p == null ? "" : `<div class="bar"><i class="${p > 85 ? "hot" : ""}" style="width:${p}%"></i></div>`}</div>`;
+  $("#stats").innerHTML =
+    tile("المعالج", s.cpu + "%", s.cores + " أنوية · الحمل " + s.load[0].toFixed(2), s.cpu) +
+    tile("الذاكرة", pct(s.mem_used, s.mem_total) + "%", fmtBytes(s.mem_used) + " من " + fmtBytes(s.mem_total), pct(s.mem_used, s.mem_total)) +
+    tile("القرص", pct(s.disk_used, s.disk_total) + "%", fmtBytes(s.disk_used) + " من " + fmtBytes(s.disk_total), pct(s.disk_used, s.disk_total)) +
+    tile("الحرارة / التشغيل", s.temp == null ? "—" : s.temp + "°", "يعمل منذ " + fmtUptime(s.uptime), null);
+
+  $("#services").innerHTML = d.services.map((x) => `<div class="card svc"><span><span class="dot ${x.ok ? "ok" : ""}"></span>${esc(x.name)}</span>
+    ${x.id === "ssh" ? "" : `<button class="btn small ghost" data-restart="${esc(x.id)}">إعادة تشغيل</button>`}</div>`).join("");
+
+  $("#tunnels").innerHTML = d.tunnels.length ? d.tunnels.map((t) => {
+    const cls = t.service === "active" && t.connections ? "ok" : t.service === "active" ? "warn" : "";
+    return `<div class="card"><div class="svc"><b><span class="dot ${cls}"></span>${esc(t.account)}</b>
+      <button class="btn small ghost" data-restart="tunnel:${esc(t.account)}">إعادة تشغيل</button></div>
+      <div class="muted small">التونل: ${esc(t.tunnel)} · الاتصالات: ${t.connections}</div>
+      <div class="muted small" dir="ltr" style="text-align:right">${t.zones.map(esc).join(", ")}</div></div>`;
+  }).join("") : `<p class="muted">لا يوجد حسابات مربوطة.</p>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-restart]");
+  if (!b) return;
+  await busy(b, async () => {
+    try { await api(`/api/services/${encodeURIComponent(b.dataset.restart)}/restart`, { method: "POST" }); toast("تمت إعادة التشغيل ✓"); setTimeout(loadDash, 1500); }
+    catch (err) { toast(err.message, true); }
+  });
+});
+
+// ---------- sites ----------
+let sitesData;
+const KIND = { site: "موقع", panel: "اللوحة", ssh: "SSH", manager: "المدير" };
+
+async function loadSites() {
+  const tb = $("#sites-table tbody");
+  tb.innerHTML = `<tr><td colspan="5" class="muted">جارِ التحميل…</td></tr>`;
+  try { sitesData = await api("/api/sites"); } catch (e) { tb.innerHTML = ""; return toast(e.message, true); }
+  tb.innerHTML = sitesData.sites.map((s) => {
+    const url = s.kind === "ssh" ? esc(s.hostname) : `<a href="https://${esc(s.hostname)}${s.kind === "panel" ? "" : "/"}" target="_blank" rel="noopener" dir="ltr">${esc(s.hostname)}</a>`;
+    let status;
+    if (!s.published) status = `<span class="dot warn"></span>غير منشور`;
+    else if (s.kind !== "site") status = `<span class="dot ok"></span>منشور`;
+    else if (!s.panel) status = `<span class="dot warn"></span>غير موجود في aaPanel`;
+    else status = `<span class="dot ${/^[23]/.test(s.http) ? "ok" : ""}"></span>منشور · ${esc(s.http)}`;
+    let actions = "";
+    if (!s.locked) {
+      if (!s.published && s.publishable) actions += `<button class="btn small primary" data-pub="${esc(s.hostname)}">نشر</button>`;
+      if (!s.published && !s.publishable) actions += `<span class="muted small">الدومين غير مربوط بحساب</span>`;
+      if (s.published) actions += `<button class="btn small ghost" data-unpub="${esc(s.hostname)}">إلغاء النشر</button>`;
+      actions += `<button class="btn small ghost" data-del="${esc(s.hostname)}">حذف</button>`;
+    } else actions = `<span class="muted small">🔒 محمي</span>`;
+    return `<tr><td>${url}${s.label ? `<div class="muted small">${esc(s.label)}</div>` : ""}</td>
+      <td><span class="tag">${KIND[s.kind] || s.kind}</span></td><td>${esc(s.account || "—")}</td>
+      <td>${status}</td><td><div class="actions">${actions}</div></td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="muted">لا توجد مواقع بعد.</td></tr>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const pub = e.target.closest("[data-pub]"), unpub = e.target.closest("[data-unpub]"), del = e.target.closest("[data-del]");
+  if (pub) await busy(pub, async () => {
+    try { const r = await api(`/api/sites/${pub.dataset.pub}/publish`, { method: "POST" }); toast("تم النشر: " + r.url); loadSites(); }
+    catch (err) { toast(err.message, true); }
+  });
+  if (unpub) await busy(unpub, async () => {
+    try { await api(`/api/sites/${unpub.dataset.unpub}/unpublish`, { method: "POST" }); toast("تم إلغاء النشر (الموقع باقٍ في aaPanel)"); loadSites(); }
+    catch (err) { toast(err.message, true); }
+  });
+  if (del) openDelete(del.dataset.del);
+});
+
+// add site
+$("#open-add").addEventListener("click", () => {
+  if (!sitesData) return;
+  $("#add-zone").innerHTML = sitesData.zones.map((z) => `<option>${esc(z)}</option>`).join("");
+  $("#add-php").innerHTML = sitesData.php.map((v) => `<option value="${v}">PHP ${v[0]}.${v[1]}</option>`).join("") || `<option value="00">ثابت (بدون PHP)</option>`;
+  $("#add-form").reset(); $("#add-err").hidden = true; $("#add-dns").textContent = "";
+  $("#add-dlg").showModal(); $("#add-sub").focus();
+});
+const addHost = () => { const sub = $("#add-sub").value.trim().toLowerCase(); return sub ? sub + "." + $("#add-zone").value : ""; };
+let dnsTimer;
+async function checkDns() {
+  const h = addHost(), out = $("#add-dns");
+  if (!h || !$("#add-sub").checkValidity()) { out.textContent = ""; return; }
+  out.textContent = "جارِ التحقق من " + h + "…";
+  try {
+    const r = await api("/api/dns-check?hostname=" + encodeURIComponent(h));
+    out.innerHTML = r.status === "free" ? `✅ <span dir="ltr">${esc(h)}</span> متاح`
+      : r.status === "ours" ? `ℹ️ مربوط بهذا الخادم مسبقاً`
+      : `⛔ مستخدم في مكان آخر (${esc(r.record.type)} ← <span dir="ltr">${esc(r.record.content)}</span>)`;
+  } catch (err) { out.textContent = err.message; }
+}
+["input", "change"].forEach((ev) => { $("#add-sub").addEventListener(ev, () => { clearTimeout(dnsTimer); dnsTimer = setTimeout(checkDns, 500); }); });
+$("#add-zone").addEventListener("change", checkDns);
+
+$("#add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#add-err").hidden = true;
+  const btn = $("#add-go"), label = btn.textContent;
+  btn.textContent = "جارِ الإنشاء…";
+  await busy(btn, async () => {
+    try {
+      const r = await api("/api/sites", { method: "POST", body: { hostname: addHost(), php: $("#add-php").value, db: $("#add-db").checked, note: $("#add-note").value } });
+      $("#add-dlg").close();
+      let html = `<h3>🎉 الموقع جاهز</h3><p><a href="${esc(r.url)}" target="_blank" rel="noopener" dir="ltr">${esc(r.url)}</a></p>
+        <p class="muted small">قد يستغرق ظهوره دقيقة حتى ينتشر سجل DNS.</p>`;
+      if (r.db) html += `<p><b>بيانات قاعدة البيانات — احفظها الآن:</b></p><div class="creds">DB: ${esc(r.db.name)}<br>User: ${esc(r.db.user)}<br>Pass: ${esc(r.db.password)}</div>`;
+      $("#msg-body").innerHTML = html; $("#msg-dlg").showModal();
+      loadSites();
+    } catch (err) { $("#add-err").textContent = err.message; $("#add-err").hidden = false; }
+  });
+  btn.textContent = label;
+});
+
+// delete site
+function openDelete(host) {
+  $("#del-form").reset(); $("#del-err").hidden = true;
+  $("#del-name").textContent = host; $("#del-form").dataset.host = host;
+  $("#del-dlg").showModal(); $("#del-confirm").focus();
+}
+$("#del-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const host = e.target.dataset.host, btn = e.submitter;
+  await busy(btn, async () => {
+    try {
+      await api(`/api/sites/${host}`, { method: "DELETE", body: { confirm: $("#del-confirm").value.trim(), files: $("#del-files").checked, db: $("#del-db").checked } });
+      $("#del-dlg").close(); toast("تم حذف " + host); loadSites();
+    } catch (err) { $("#del-err").textContent = err.message; $("#del-err").hidden = false; }
+  });
+});
+
+$$("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+
+// ---------- logs ----------
+async function loadLogSources() {
+  try {
+    const r = await api("/api/logs");
+    const cur = $("#log-src").value;
+    $("#log-src").innerHTML = r.sources.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+    if (cur) $("#log-src").value = cur;
+    loadLog();
+  } catch (e) { toast(e.message, true); }
+}
+async function loadLog() {
+  const pre = $("#log-text");
+  pre.textContent = "…";
+  try {
+    const r = await api(`/api/logs?source=${encodeURIComponent($("#log-src").value)}&lines=${$("#log-lines").value}`);
+    pre.textContent = r.text || "(فارغ)"; pre.scrollTop = pre.scrollHeight;
+  } catch (e) { pre.textContent = e.message; }
+}
+$("#log-src").addEventListener("change", loadLog);
+$("#log-lines").addEventListener("change", loadLog);
+$("#log-refresh").addEventListener("click", loadLog);
+
+// ---------- settings ----------
+async function loadSettings() {
+  try { const d = await api("/api/overview"); $("#realip").checked = d.realip; } catch (e) { toast(e.message, true); }
+}
+$("#realip").addEventListener("change", async (e) => {
+  const want = e.target.checked;
+  try { await api("/api/settings/realip", { method: "POST", body: { enable: want } }); toast(want ? "تم التفعيل ✓" : "تم الإيقاف"); }
+  catch (err) { e.target.checked = !want; toast(err.message, true); }
+});
+
+// ---------- boot ----------
+api("/api/me").then((r) => (r.ok ? showApp() : showLogin())).catch(showLogin);

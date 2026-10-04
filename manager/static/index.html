@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Old-Home</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<section id="login" class="login" hidden>
+  <form id="login-form" class="card login-card">
+    <h1>🏠 Old-Home</h1>
+    <p class="muted">لوحة إدارة الخادم المنزلي</p>
+    <input id="login-pw" type="password" placeholder="كلمة المرور" autocomplete="current-password" required>
+    <button class="btn primary" type="submit">دخول</button>
+    <p id="login-err" class="err" hidden></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand">🏠 <b>Old-Home</b> <span id="hostname" class="muted"></span></div>
+    <nav id="tabs">
+      <button data-tab="dash" class="on">الرئيسية</button>
+      <button data-tab="sites">المواقع</button>
+      <button data-tab="logs">السجلات</button>
+      <button data-tab="settings">الإعدادات</button>
+    </nav>
+    <button id="logout" class="btn ghost small">خروج</button>
+  </header>
+
+  <main>
+    <!-- Dashboard -->
+    <section data-pane="dash">
+      <div class="grid stats" id="stats"></div>
+      <h2>الخدمات</h2>
+      <div class="grid" id="services"></div>
+      <h2>التونلات (Cloudflare)</h2>
+      <div class="grid" id="tunnels"></div>
+    </section>
+
+    <!-- Sites -->
+    <section data-pane="sites" hidden>
+      <div class="row between">
+        <h2>المواقع والروابط</h2>
+        <button class="btn primary" id="open-add">➕ إضافة موقع</button>
+      </div>
+      <div class="card table-wrap"><table id="sites-table">
+        <thead><tr><th>الرابط</th><th>النوع</th><th>الحساب</th><th>الحالة</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="muted small">المواقع التي تضيفها من aaPanel مباشرة تظهر هنا بحالة "غير منشور" — اضغط "نشر" لربطها بالدومين.</p>
+    </section>
+
+    <!-- Logs -->
+    <section data-pane="logs" hidden>
+      <div class="row">
+        <select id="log-src"></select>
+        <select id="log-lines"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+        <button class="btn" id="log-refresh">تحديث</button>
+      </div>
+      <pre id="log-text" class="log" dir="ltr"></pre>
+    </section>
+
+    <!-- Settings -->
+    <section data-pane="settings" hidden>
+      <div class="card setting">
+        <div>
+          <h3>عناوين IP الحقيقية للزوار</h3>
+          <p class="muted">بدونها تظهر كل الزيارات في السجلات قادمة من 127.0.0.1 بسبب التونل.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="realip"><span></span></label>
+      </div>
+      <div class="card setting">
+        <div>
+          <h3>النسخ الاحتياطي وإعادة البناء</h3>
+          <p class="muted">قريباً — المرحلة القادمة (GitHub).</p>
+        </div>
+      </div>
+      <div class="card setting">
+        <div>
+          <h3>إضافة حساب Cloudflare</h3>
+          <p class="muted">قريباً.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Add site dialog -->
+<dialog id="add-dlg">
+  <form id="add-form" method="dialog" class="dlg">
+    <h3>➕ موقع جديد</h3>
+    <label>الدومين
+      <div class="row nowrap" dir="ltr">
+        <input id="add-sub" placeholder="blog" required pattern="[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*">
+        <span>.</span>
+        <select id="add-zone"></select>
+      </div>
+    </label>
+    <p id="add-dns" class="small muted"></p>
+    <label>نسخة PHP <select id="add-php"></select></label>
+    <label class="check"><input type="checkbox" id="add-db"> إنشاء قاعدة بيانات MySQL</label>
+    <label>ملاحظة (اختياري) <input id="add-note" placeholder="مثلاً: مدونتي"></label>
+    <p id="add-err" class="err" hidden></p>
+    <div class="row end">
+      <button type="button" class="btn ghost" data-close>إلغاء</button>
+      <button type="submit" class="btn primary" id="add-go">إنشاء ونشر</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Delete dialog -->
+<dialog id="del-dlg">
+  <form id="del-form" method="dialog" class="dlg">
+    <h3>🗑️ حذف موقع</h3>
+    <p>سيُحذف الموقع من aaPanel ومن التونل، ويُحذف سجل DNS الخاص به.</p>
+    <label class="check"><input type="checkbox" id="del-files"> احذف ملفات الموقع أيضاً</label>
+    <label class="check"><input type="checkbox" id="del-db"> احذف قاعدة البيانات أيضاً</label>
+    <label>للتأكيد اكتب: <b id="del-name" dir="ltr"></b>
+      <input id="del-confirm" dir="ltr" autocomplete="off"></label>
+    <p id="del-err" class="err" hidden></p>
+    <div class="row end">
+      <button type="button" class="btn ghost" data-close>إلغاء</button>
+      <button type="submit" class="btn danger">حذف نهائي</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Result dialog -->
+<dialog id="msg-dlg"><div class="dlg"><div id="msg-body"></div>
+  <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
+
+<div id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
