@@ -121,10 +121,15 @@ def finish(name=None):
         os.chmod(cert_dest, 0o600)
 
         # tunnel names are unique per CF account, so name it after this machine
-        tunnel_name = re.sub(r"[^a-z0-9-]", "-", socket.gethostname().lower()).strip("-") or "old-home"
-        creds = os.path.join(d, tunnel_name + ".json")
-        r = subprocess.run(["cloudflared", "--origincert", cert_dest, "tunnel", "create",
-                            "--credentials-file", creds, tunnel_name], capture_output=True, text=True)
+        # (another server with the same hostname may already own it → add a suffix)
+        base = re.sub(r"[^a-z0-9-]", "-", socket.gethostname().lower()).strip("-") or "old-home"
+        for attempt in range(1, 10):
+            tunnel_name = base if attempt == 1 else "%s-%d" % (base, attempt)
+            creds = os.path.join(d, tunnel_name + ".json")
+            r = subprocess.run(["cloudflared", "--origincert", cert_dest, "tunnel", "create",
+                                "--credentials-file", creds, tunnel_name], capture_output=True, text=True)
+            if r.returncode == 0 or "already exists" not in (r.stderr + r.stdout):
+                break
         if r.returncode != 0:
             shutil.rmtree(d, ignore_errors=True)
             raise RuntimeError("فشل إنشاء التونل: " + (r.stderr or r.stdout).strip()[-400:])
