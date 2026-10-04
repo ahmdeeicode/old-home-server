@@ -51,7 +51,7 @@ function switchTab(tab) {
   $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== tab));
   history.replaceState(null, "", "#" + tab);
   clearInterval(refreshTimer);
-  ({ dash: loadDash, sites: loadSites, logs: loadLogSources, settings: loadSettings })[tab]();
+  ({ dash: loadDash, sites: loadSites, domains: loadAccounts, logs: loadLogSources, settings: loadSettings })[tab]();
   if (tab === "dash") refreshTimer = setInterval(loadDash, 5000);
 }
 $$("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
@@ -138,13 +138,13 @@ $("#open-add").addEventListener("click", () => {
   $("#add-zone").innerHTML = sitesData.zones.map((z) => `<option>${esc(z)}</option>`).join("");
   $("#add-php").innerHTML = sitesData.php.map((v) => `<option value="${v}">PHP ${v[0]}.${v[1]}</option>`).join("") || `<option value="00">ثابت (بدون PHP)</option>`;
   $("#add-form").reset(); $("#add-err").hidden = true; $("#add-dns").textContent = "";
-  $("#add-dlg").showModal(); $("#add-sub").focus();
+  $("#add-dlg").showModal(); $("#add-sub").focus(); checkDns();
 });
-const addHost = () => { const sub = $("#add-sub").value.trim().toLowerCase(); return sub ? sub + "." + $("#add-zone").value : ""; };
+const addHost = () => { const sub = $("#add-sub").value.trim().toLowerCase(); return sub ? sub + "." + $("#add-zone").value : $("#add-zone").value; };
 let dnsTimer;
 async function checkDns() {
   const h = addHost(), out = $("#add-dns");
-  if (!h || !$("#add-sub").checkValidity()) { out.textContent = ""; return; }
+  if (!$("#add-sub").checkValidity()) { out.textContent = ""; return; }
   out.textContent = "جارِ التحقق من " + h + "…";
   try {
     const r = await api("/api/dns-check?hostname=" + encodeURIComponent(h));
@@ -193,6 +193,59 @@ $("#del-form").addEventListener("submit", async (e) => {
 });
 
 $$("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+
+// ---------- domains / accounts ----------
+async function loadAccounts() {
+  try {
+    const r = await api("/api/accounts");
+    $("#accounts").innerHTML = r.accounts.map((a) => {
+      const cls = a.service === "active" && a.connections ? "ok" : a.service === "active" ? "warn" : "";
+      return `<div class="card"><div class="svc"><b><span class="dot ${cls}"></span>${esc(a.name)}</b>
+        <span class="muted small">${a.connections} اتصالات</span></div>
+        <div class="muted small">التونل: ${esc(a.tunnel)}</div>
+        <ul dir="ltr" style="text-align:right;margin:.5rem 0 0;padding:0 1.2rem 0 0">${a.zones.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></div>`;
+    }).join("") || `<p class="muted">لا توجد حسابات.</p>`;
+    if (r.login.state === "pending" || r.login.state === "authorized") resumeLink(r.login);
+  } catch (e) { toast(e.message, true); }
+}
+
+let linkPoll;
+function linkStep(n) { [1, 2, 3].forEach((i) => ($("#link-step" + i).hidden = i !== n)); }
+$("#open-link").addEventListener("click", () => { linkStep(1); $("#link-dlg").showModal(); });
+$("#link-start").addEventListener("click", (e) => busy(e.target, async () => {
+  try { const r = await api("/api/accounts/login", { method: "POST" }); resumeLink({ state: "pending", url: r.url }); }
+  catch (err) { toast(err.message, true); }
+}));
+function resumeLink(st) {
+  if (!$("#link-dlg").open) $("#link-dlg").showModal();
+  if (st.state === "authorized") return showAuthorized(st);
+  $("#link-url").href = st.url; linkStep(2);
+  clearInterval(linkPoll);
+  linkPoll = setInterval(async () => {
+    try {
+      const s = await api("/api/accounts/login");
+      if (s.state === "authorized") { clearInterval(linkPoll); showAuthorized(s); }
+      else if (s.state === "failed" || s.state === "none") { clearInterval(linkPoll); $("#link-wait").textContent = "❌ " + (s.detail || "توقف التفويض"); }
+    } catch (_) {}
+  }, 2500);
+}
+function showAuthorized(s) {
+  linkStep(3); $("#link-err").hidden = true;
+  if (s.already_linked) { $("#link-found").innerHTML = `ℹ️ الدومين <b dir="ltr">${esc(s.zone)}</b> مربوط مسبقاً.`; $("#link-name-wrap").hidden = true; }
+  else if (s.existing_account) { $("#link-found").innerHTML = `✅ <b dir="ltr">${esc(s.zone)}</b> — في حساب موجود (<b>${esc(s.existing_account)}</b>)، سيُضاف إلى نفس التونل.`; $("#link-name-wrap").hidden = true; }
+  else { $("#link-found").innerHTML = `✅ <b dir="ltr">${esc(s.zone)}</b> — حساب Cloudflare جديد، سيُنشأ له تونل مستقل.`; $("#link-name-wrap").hidden = false; $("#link-name").value = s.zone.split(".")[0].toLowerCase().replace(/[^a-z0-9-]/g, ""); }
+}
+$("#link-finish").addEventListener("click", (e) => busy(e.target, async () => {
+  try {
+    const r = await api("/api/accounts/finish", { method: "POST", body: { name: $("#link-name").value.trim() } });
+    $("#link-dlg").close();
+    toast(`تم ربط ${r.zone}` + (r.new_account ? ` (حساب جديد: ${r.account})` : ""));
+    loadAccounts();
+  } catch (err) { $("#link-err").textContent = err.message; $("#link-err").hidden = false; }
+}));
+async function cancelLink() { clearInterval(linkPoll); await api("/api/accounts/cancel", { method: "POST" }).catch(() => {}); $("#link-dlg").close(); }
+$("#link-cancel").addEventListener("click", cancelLink);
+$("#link-cancel2").addEventListener("click", cancelLink);
 
 // ---------- logs ----------
 async function loadLogSources() {

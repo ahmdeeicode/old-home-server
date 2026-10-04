@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
 
-from core import aapanel, cf, state, system
+from core import aapanel, accounts, cf, state, system
 
 ETC = state.ETC
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -229,6 +229,45 @@ def delete_site(hostname):
         if site:
             aapanel.delete_site(site["id"], h, delete_files=bool(body.get("files")),
                                 delete_db=bool(body.get("db")))
+    return {"ok": True}
+
+
+# ---------- Cloudflare accounts / domains ----------
+
+@app.get("/api/accounts")
+@api
+def accounts_list():
+    data = state.load()
+    out = []
+    for name, acct in data["accounts"].items():
+        out.append({"name": name, "tunnel": acct["tunnel_name"],
+                    "zones": sorted(z for z, v in data["zones"].items() if v["account"] == name),
+                    **cf.tunnel_status(data, name)})
+    return {"accounts": out, "login": accounts.status()}
+
+
+@app.post("/api/accounts/login")
+@api
+def accounts_login():
+    return accounts.start()
+
+
+@app.get("/api/accounts/login")
+@api
+def accounts_login_status():
+    return accounts.status()
+
+
+@app.post("/api/accounts/finish")
+@api
+def accounts_finish():
+    return accounts.finish((request.get_json(silent=True) or {}).get("name"))
+
+
+@app.post("/api/accounts/cancel")
+@api
+def accounts_cancel():
+    accounts.cancel()
     return {"ok": True}
 
 
