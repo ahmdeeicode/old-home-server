@@ -9,6 +9,7 @@ the browser, and finish() files the cert:
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -119,7 +120,8 @@ def finish(name=None):
         shutil.copy2(src, cert_dest)
         os.chmod(cert_dest, 0o600)
 
-        tunnel_name = "old-home"
+        # tunnel names are unique per CF account, so name it after this machine
+        tunnel_name = re.sub(r"[^a-z0-9-]", "-", socket.gethostname().lower()).strip("-") or "old-home"
         creds = os.path.join(d, tunnel_name + ".json")
         r = subprocess.run(["cloudflared", "--origincert", cert_dest, "tunnel", "create",
                             "--credentials-file", creds, tunnel_name], capture_output=True, text=True)
