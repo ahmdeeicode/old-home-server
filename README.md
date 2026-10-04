@@ -9,7 +9,25 @@
 | `manager/core/cf.py` | التونلات وسجلات DNS في Cloudflare |
 | `manager/core/aapanel.py` | إنشاء المواقع وحذفها عبر API الخاصة بـ aaPanel (مقيّدة بـ 127.0.0.1) |
 | `manager/cli.py` | `import` و`set-password` و`apply` |
-| `install.sh` | تثبيت اللوحة أو تحديثها كخدمة systemd |
+| `install.sh` | تثبيت كامل لخادم جديد، أو تحديث خادم موجود |
+| `manager/scripts/enable_aapanel_api.py` | تفعيل API الخاصة بـ aaPanel للجهاز المحلي فقط (يعمل بـ btpython) |
+
+## 🆕 التثبيت على خادم جديد (Ubuntu/Debian)
+```bash
+# 1. ربط GitHub (مرة واحدة) — يعطيك كوداً ورابطاً تفتحه في المتصفح
+sudo apt-get install -y gh git && gh auth login
+
+# 2. تنزيل المشروع وتثبيت كل شيء
+sudo gh repo clone ahmdeeicode/old-home-server /opt/oldhome
+sudo bash /opt/oldhome/install.sh
+```
+يثبّت السكربت تلقائياً: aaPanel ← cloudflared ← خدمة التونلات ← API الخاصة بـ aaPanel (للجهاز المحلي فقط) ← اللوحة.
+في النهاية يطبع بيانات الدخول إلى aaPanel وكلمة مرور اللوحة. إعادة تشغيله آمنة، فهو يتخطى ما هو مثبّت.
+
+**بعد التثبيت:**
+1. في aaPanel ثبّت **LNMP** (Nginx وMySQL وPHP)
+2. افتح اللوحة (انظر "الوصول إلى اللوحة") ← **الدومينات** ← **ربط دومين**
+3. **المواقع** ← **إضافة موقع**
 
 ## أين تُحفظ الإعدادات (خارج المستودع)
 - `/etc/oldhome/state.json`: المرجع الوحيد للحسابات والدومينات والمسارات
@@ -21,7 +39,7 @@
 ## الوصول إلى اللوحة
 تستمع اللوحة على `127.0.0.1:8800` فقط:
 ```
-ssh -L 8800:localhost:8800 ssh-oldhome.ssaa.site
+ssh -L 8800:localhost:8800 root@<عنوان-الخادم>
 ```
 ثم افتح http://localhost:8800
 
