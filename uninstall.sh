@@ -66,6 +66,23 @@ hdr "اختياري (سأسألك):"
 echo
 ask "متابعة؟ اكتب yes للتنفيذ" || { echo "تم الإلغاء — لم يتغير شيء."; exit 0; }
 
+# All questions first — once removal starts it must run to the end unattended.
+DO_REALIP=0; DO_SSHD=0; DO_F2B=0; DO_API=0
+if [ -f "$REALIP" ] || [ -f "$SSHD_DROPIN" ] || [ -f "$F2B_JAIL" ] || [ -n "$API_BAK" ]; then
+  hdr "أسئلة اختيارية (الإجابة الافتراضية no):"
+  [ -f "$REALIP" ]      && ask "حذف إعداد عناوين IP الحقيقية من Nginx؟" && DO_REALIP=1
+  [ -f "$SSHD_DROPIN" ] && ask "إلغاء السماح بدخول root عبر SSH (يبقى مستخدمك العادي)؟" && DO_SSHD=1
+  [ -f "$F2B_JAIL" ]    && ask "حذف حماية fail2ban لـ SSH؟ (يُنصح بالإجابة no)" && DO_F2B=1
+  [ -n "$API_BAK" ] && [ -f "$PANEL_API" ] && ask "إرجاع API الخاصة بـ aaPanel كما كانت قبل اللوحة؟" && DO_API=1
+fi
+
+# From here on: no prompts, survive a dropped SSH session (the tunnel may
+# restart) or Ctrl+C, and keep a full log.
+LOGF=/root/oldhome-uninstall.log
+trap '' HUP INT PIPE
+exec > >(tee --output-error=warn-nopipe -a "$LOGF") 2>&1
+echo "== $(date '+%F %T') uninstall started (full=$FULL)"
+
 # ---------------- backup ----------------
 hdr "نسخة احتياطية"
 BK=/root/oldhome-backup-$(date +%Y%m%d-%H%M%S).tar.gz
@@ -91,9 +108,6 @@ fi
 
 # ---------------- manager ----------------
 hdr "لوحة Old-Home"
-if [ $FULL = 0 ] && [ -f /etc/oldhome/state.json ]; then
-  (cd "$DIR/manager" && python3 cli.py drop-manager-links)   # links to the manager would 502
-fi
 for u in oldhome-manager oldhome-manager-direct; do
   systemctl disable --now "$u" >/dev/null 2>&1
   rm -f "/etc/systemd/system/$u.service"
@@ -110,20 +124,20 @@ if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
 fi
 
 # ---------------- optional ----------------
-if [ -f "$REALIP" ] && ask "حذف إعداد عناوين IP الحقيقية من Nginx؟"; then
+if [ $DO_REALIP = 1 ]; then
   rm -f "$REALIP"
   /www/server/nginx/sbin/nginx -t >/dev/null 2>&1 && /etc/init.d/nginx reload >/dev/null 2>&1
   ok "حُذف"
 fi
-if [ -f "$SSHD_DROPIN" ] && ask "إلغاء السماح بدخول root عبر SSH (يبقى مستخدمك العادي)؟"; then
+if [ $DO_SSHD = 1 ]; then
   mv "$SSHD_DROPIN" "$SSHD_DROPIN.removed"
   if sshd -t 2>/dev/null; then systemctl reload ssh 2>/dev/null || systemctl reload sshd; ok "أُلغي"
   else mv "$SSHD_DROPIN.removed" "$SSHD_DROPIN"; echo "  ✗ إعداد SSH غير صالح — تم التراجع"; fi
 fi
-if [ -f "$F2B_JAIL" ] && ask "حذف حماية fail2ban لـ SSH؟ (يُنصح بالإجابة no)"; then
+if [ $DO_F2B = 1 ]; then
   rm -f "$F2B_JAIL"; systemctl restart fail2ban >/dev/null 2>&1; ok "حُذفت"
 fi
-if [ -n "$API_BAK" ] && [ -f "$PANEL_API" ] && ask "إرجاع API الخاصة بـ aaPanel كما كانت قبل اللوحة؟"; then
+if [ $DO_API = 1 ]; then
   python3 - "$PANEL_API" "$API_BAK" <<'EOF'
 import json, sys
 cur, orig = (json.load(open(p)) for p in sys.argv[1:3])
@@ -132,6 +146,12 @@ cur["limit_addr"] = [ip for ip in cur.get("limit_addr", []) if ip != "127.0.0.1"
 json.dump(cur, open(sys.argv[1], "w"))
 print("  ✓ open=%s, limit_addr=%s" % (cur["open"], cur["limit_addr"]))
 EOF
+fi
+
+# Links that open the manager would 502 once it is gone. Removing them restarts
+# the tunnel (may drop an SSH-over-tunnel session) — so it happens last.
+if [ $FULL = 0 ] && [ -f /etc/oldhome/state.json ]; then
+  (cd "$DIR/manager" && python3 cli.py drop-manager-links)
 fi
 
 # last: config + code (this script lives in $DIR)
@@ -146,5 +166,6 @@ echo "════════════════════════�
 echo " تمت إزالة Old-Home."
 [ $FULL = 0 ] && [ -n "$ACCOUNT_DIRS" ] && echo " التونلات ما زالت تعمل: $(for a in $ACCOUNT_DIRS; do printf 'cloudflared@%s ' "$a"; done)"
 echo " النسخة الاحتياطية: $BK"
+echo " السجل: $LOGF"
 echo " لإعادة التثبيت: curl -fsSL https://raw.githubusercontent.com/ahmdeeicode/old-home-server/main/bootstrap.sh | sudo bash"
 echo "════════════════════════════════════════════"
