@@ -51,6 +51,8 @@ def access_guard():
     if host in LOCAL_HOSTS and not via_cf:
         return None
     route = state.find_route(state.load(), host)
+    if (route or {}).get("kind") == "manager" and route.get("password_only"):
+        return None   # owner chose password-only (no Access); login is throttled per visitor IP
     acc = (route or {}).get("access") if (route or {}).get("kind") == "manager" else None
     token = request.headers.get("Cf-Access-Jwt-Assertion") or request.cookies.get("CF_Authorization")
     if not acc or not token:
@@ -104,6 +106,14 @@ def _host(value):
 
 # ---------- auth ----------
 
+def _client_ip():
+    """Real visitor IP. Behind cloudflared every request is from 127.0.0.1;
+    Cloudflare sets CF-Connecting-IP (it overwrites any client-sent value)."""
+    if request.remote_addr in ("127.0.0.1", "::1") and request.headers.get("Cf-Connecting-Ip"):
+        return request.headers["Cf-Connecting-Ip"]
+    return request.remote_addr or "?"
+
+
 _fails = {}  # ip -> [timestamps of failed logins]
 MAX_FAILS, WINDOW = 5, 15 * 60
 
@@ -111,7 +121,7 @@ MAX_FAILS, WINDOW = 5, 15 * 60
 @app.post("/api/login")
 def login():
     import time
-    ip = request.remote_addr or "?"
+    ip = _client_ip()
     now = time.time()
     recent = [t for t in _fails.get(ip, []) if now - t < WINDOW]
     if len(recent) >= MAX_FAILS:
@@ -147,7 +157,7 @@ def change_password():
     import time
     from werkzeug.security import generate_password_hash
     body = request.get_json(silent=True) or {}
-    ip = request.remote_addr or "?"
+    ip = _client_ip()
     recent = [t for t in _fails.get(ip, []) if time.time() - t < WINDOW]
     if len(recent) >= MAX_FAILS:
         raise ValueError("محاولات خاطئة كثيرة — حاول لاحقاً")
@@ -395,6 +405,7 @@ def server_routes():
     rows = [{"hostname": r["hostname"], "kind": r["kind"], "label": SERVER_KINDS[r["kind"]],
              "account": data["zones"].get(state.zone_for(data, r["hostname"]) or "", {}).get("account"),
              "protected": bool(r.get("access")) if r["kind"] == "manager" else None,
+             "password_only": bool(r.get("password_only")),
              "admin_path": system.panel_admin_path() if r["kind"] == "panel" else ""}
             for r in data["routes"] if r.get("kind") in SERVER_KINDS]
     return {"routes": rows, "zones": sorted(data["zones"])}
@@ -421,6 +432,9 @@ def add_server_route():
             route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
         elif kind == "ssh":
             route.update(service="ssh://localhost:%d" % _ssh_port())
+        elif body.get("protection") == "password":
+            # owner's explicit choice: no Access, password + per-IP throttling only
+            route.update(service="http://localhost:%d" % MANAGER_PORT, password_only=True)
         else:
             # DNS first, NO ingress yet: the manager must stay unreachable
             # unless Cloudflare Access is demonstrably in front of it.

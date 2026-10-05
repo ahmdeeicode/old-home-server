@@ -247,7 +247,7 @@ async function loadServerRoutes() {
     tb.innerHTML = r.routes.map((x) => {
       const href = x.kind === "ssh" ? "" : `https://${x.hostname}${x.kind === "panel" ? x.admin_path : "/"}`;
       const link = href ? `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr">${esc(x.hostname)}</a>` : `<span dir="ltr">${esc(x.hostname)}</span>`;
-      const prot = x.kind === "manager" ? (x.protected ? " 🛡️" : " ⚠️") : "";
+      const prot = x.kind === "manager" ? (x.protected ? " 🛡️" : x.password_only ? " 🔑" : " ⚠️") : "";
       return `<tr><td>${link}${prot}</td><td>${esc(x.label)}</td><td>${esc(x.account || "—")}</td>
         <td><div class="actions"><button class="btn small ghost" data-srdel="${esc(x.hostname)}" data-kind="${esc(x.kind)}">حذف</button></div></td></tr>`;
     }).join("") || `<tr><td colspan="4" class="muted">لا توجد روابط — أضف رابطاً للوحة aaPanel أو SSH.</td></tr>`;
@@ -257,7 +257,9 @@ let srZones = [];
 const srHost = () => $("#sr-sub").value.trim().toLowerCase() + "." + $("#sr-zone").value;
 function srUpdate() {
   const k = $("#sr-kind").value;
-  $("#sr-access").hidden = k !== "manager";
+  const prot = (document.querySelector('input[name="sr-prot"]:checked') || {}).value || "access";
+  $("#sr-prot").hidden = k !== "manager";
+  $("#sr-access").hidden = !(k === "manager" && prot === "access");
   $("#sr-host-hint").textContent = srHost();
   $("#sr-warn").textContent = k === "ssh" ? "للاتصال: cloudflared access ssh --hostname " + srHost()
     : k === "panel" ? "سيفتح لوحة aaPanel مع مسار الدخول الأمني." : "";
@@ -269,13 +271,15 @@ $("#open-sr").addEventListener("click", () => {
   srUpdate(); $("#sr-dlg").showModal(); $("#sr-sub").focus();
 });
 ["input", "change"].forEach((ev) => ["#sr-kind", "#sr-sub", "#sr-zone"].forEach((id) => $(id).addEventListener(ev, srUpdate)));
+$$('input[name="sr-prot"]').forEach((r) => r.addEventListener("change", srUpdate));
 $("#sr-form").addEventListener("submit", async (e) => {
   e.preventDefault(); $("#sr-err").hidden = true;
-  const btn = $("#sr-go"), label = btn.textContent, manager = $("#sr-kind").value === "manager";
+  const protection = (document.querySelector('input[name="sr-prot"]:checked') || {}).value || "access";
+  const btn = $("#sr-go"), label = btn.textContent, manager = $("#sr-kind").value === "manager" && protection === "access";
   btn.textContent = manager ? "جارِ التحقق من Access… (حتى 30 ثانية)" : "جارِ الإضافة…";
   await busy(btn, async () => {
     try {
-      const r = await api("/api/server-routes", { method: "POST", body: { kind: $("#sr-kind").value, hostname: srHost() } });
+      const r = await api("/api/server-routes", { method: "POST", body: { kind: $("#sr-kind").value, hostname: srHost(), protection } });
       $("#sr-dlg").close(); toast("تمت الإضافة: " + r.url); loadServerRoutes();
     } catch (err) { $("#sr-err").textContent = err.message; $("#sr-err").hidden = false; }
   });

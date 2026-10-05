@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=8">
+<link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 
@@ -224,6 +224,10 @@
         <input id="sr-sub" placeholder="panel" required pattern="[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*" style="flex:1;min-width:0">
         <span>.</span><select id="sr-zone"></select>
       </div></label>
+    <div id="sr-prot" hidden>
+      <label class="check"><input type="radio" name="sr-prot" value="access" checked> محمي بـ Cloudflare Access (رمز البريد + كلمة المرور) — موصى به</label>
+      <label class="check"><input type="radio" name="sr-prot" value="password"> كلمة مرور اللوحة فقط — أي شخص يعرف الرابط يرى صفحة الدخول</label>
+    </div>
     <div id="sr-access" class="card" style="margin-top:.75rem" hidden>
       <b>🛡️ قبل الضغط على "إضافة" — أنشئ الحماية في Cloudflare:</b>
       <ol class="small" style="padding-inline-start:1.2rem;margin:.5rem 0 0">
@@ -248,6 +252,6 @@
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=8"></script>
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>
