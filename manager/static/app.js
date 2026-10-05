@@ -374,6 +374,10 @@ function showDirect(d) {
     d.urls.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join("<br>") + (d.active ? "" : " ⚠️ الخدمة متوقفة");
 }
 $$('input[name="direct"]').forEach((r) => r.addEventListener("change", async () => {
+  const viaDirect = location.port === "8443";
+  const warn = r.value === "off" ? (viaDirect ? "أنت متصل الآن عبر العنوان المباشر — بعد الإغلاق سينقطع اتصالك ولن تفتح اللوحة بهذا الرابط.\nمتأكد؟" : null)
+    : r.value === "public" ? "الوضع العام: أي شخص في الإنترنت يعرف عنوان الخادم يرى صفحة الدخول.\nمتأكد؟" : null;
+  if (warn && !window.confirm(warn)) return loadSettings();
   try { showDirect(await api("/api/settings/direct", { method: "POST", body: { mode: r.value } })); toast("تم الحفظ ✓"); }
   catch (err) { toast(err.message, true); loadSettings(); }
 }));

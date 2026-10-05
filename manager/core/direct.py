@@ -108,15 +108,20 @@ def set_mode(m):
     os.makedirs(ETC, mode=0o700, exist_ok=True)
     with open(CONF, "w") as f:
         json.dump({"mode": m}, f)
+    # --no-block: this request may itself be served by the direct listener;
+    # queue the restart/stop so the response reaches the browser first.
     if m == "off":
-        subprocess.run(["systemctl", "disable", "--now", UNIT], capture_output=True)
+        subprocess.run(["systemctl", "disable", UNIT], capture_output=True)
+        subprocess.run(["systemctl", "--no-block", "stop", UNIT], capture_output=True)
     else:
         cert, key = _ensure_cert()
         _write_unit(cert, key)
         subprocess.run(["systemctl", "enable", UNIT], capture_output=True)
-        subprocess.run(["systemctl", "restart", UNIT], check=True)
+        subprocess.run(["systemctl", "--no-block", "restart", UNIT], check=True)
     _ufw(m)
-    return info()
+    out = info()
+    out["active"] = m != "off"   # the queued job hasn't run yet
+    return out
 
 
 def info():
