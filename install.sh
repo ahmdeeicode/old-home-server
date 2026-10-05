@@ -164,7 +164,8 @@ echo " Or through SSH from your PC:"
 echo "   ssh -L $PORT:localhost:$PORT root@$IP"
 echo "   then browse  http://localhost:$PORT"
 echo
-if ss -tln | grep -qE "[:.]80\s"; then
+# no "ss | grep -q" here: with pipefail, grep exiting early makes ss fail (SIGPIPE)
+if [ -n "$(ss -Htln 'sport = :80')" ]; then
   echo " Next: in the manager → الدومينات → ربط دومين"
 else
   echo " Next: in aaPanel install LNMP (Nginx + MySQL + PHP),"
