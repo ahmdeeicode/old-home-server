@@ -38,7 +38,7 @@ fi
 
 step "System packages"
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git sqlite3 python3-flask python3-yaml gunicorn >/dev/null
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git sqlite3 python3-flask python3-yaml python3-jwt python3-cryptography gunicorn >/dev/null
 ok "curl git sqlite3 flask gunicorn"
 
 step "aaPanel"

@@ -208,8 +208,69 @@ async function loadAccounts() {
         <ul dir="ltr" style="text-align:right;margin:.5rem 0 0;padding:0 1.2rem 0 0">${a.zones.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></div>`;
     }).join("") || `<p class="muted">لا توجد حسابات.</p>`;
     if (r.login.state === "pending" || r.login.state === "authorized") resumeLink(r.login);
+    loadServerRoutes();
   } catch (e) { toast(e.message, true); }
 }
+
+async function loadServerRoutes() {
+  const tb = $("#sr-table tbody");
+  try {
+    const r = await api("/api/server-routes");
+    srZones = r.zones;
+    tb.innerHTML = r.routes.map((x) => {
+      const href = x.kind === "ssh" ? "" : `https://${x.hostname}${x.kind === "panel" ? x.admin_path : "/"}`;
+      const link = href ? `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr">${esc(x.hostname)}</a>` : `<span dir="ltr">${esc(x.hostname)}</span>`;
+      const prot = x.kind === "manager" ? (x.protected ? " 🛡️" : " ⚠️") : "";
+      return `<tr><td>${link}${prot}</td><td>${esc(x.label)}</td><td>${esc(x.account || "—")}</td>
+        <td><div class="actions"><button class="btn small ghost" data-srdel="${esc(x.hostname)}" data-kind="${esc(x.kind)}">حذف</button></div></td></tr>`;
+    }).join("") || `<tr><td colspan="4" class="muted">لا توجد روابط — أضف رابطاً للوحة aaPanel أو SSH.</td></tr>`;
+  } catch (e) { tb.innerHTML = ""; toast(e.message, true); }
+}
+let srZones = [];
+const srHost = () => $("#sr-sub").value.trim().toLowerCase() + "." + $("#sr-zone").value;
+function srUpdate() {
+  const k = $("#sr-kind").value;
+  $("#sr-access").hidden = k !== "manager";
+  $("#sr-host-hint").textContent = srHost();
+  $("#sr-warn").textContent = k === "ssh" ? "للاتصال: cloudflared access ssh --hostname " + srHost()
+    : k === "panel" ? "سيفتح لوحة aaPanel مع مسار الدخول الأمني." : "";
+}
+$("#open-sr").addEventListener("click", () => {
+  if (!srZones.length) return toast("اربط دوميناً أولاً", true);
+  $("#sr-form").reset(); $("#sr-err").hidden = true;
+  $("#sr-zone").innerHTML = srZones.map((z) => `<option>${esc(z)}</option>`).join("");
+  srUpdate(); $("#sr-dlg").showModal(); $("#sr-sub").focus();
+});
+["input", "change"].forEach((ev) => ["#sr-kind", "#sr-sub", "#sr-zone"].forEach((id) => $(id).addEventListener(ev, srUpdate)));
+$("#sr-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("#sr-err").hidden = true;
+  const btn = $("#sr-go"), label = btn.textContent, manager = $("#sr-kind").value === "manager";
+  btn.textContent = manager ? "جارِ التحقق من Access… (حتى 30 ثانية)" : "جارِ الإضافة…";
+  await busy(btn, async () => {
+    try {
+      const r = await api("/api/server-routes", { method: "POST", body: { kind: $("#sr-kind").value, hostname: srHost() } });
+      $("#sr-dlg").close(); toast("تمت الإضافة: " + r.url); loadServerRoutes();
+    } catch (err) { $("#sr-err").textContent = err.message; $("#sr-err").hidden = false; }
+  });
+  btn.textContent = label;
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-srdel]");
+  if (!b) return;
+  const host = b.dataset.srdel, kind = b.dataset.kind;
+  const warn = kind === "ssh" ? "<p>⚠️ إذا كنت متصلاً عبر هذا الرابط سينقطع اتصالك، ولن تستطيع الدخول عبره بعد الحذف.</p>"
+    : kind === "manager" ? "<p>⚠️ لن تعمل اللوحة عبر هذا الرابط بعد الحذف (يبقى الدخول عبر SSH).</p>" : "";
+  $("#msg-body").innerHTML = `<h3>حذف الرابط</h3>${warn}<label>للتأكيد اكتب: <b dir="ltr">${esc(host)}</b>
+    <input id="srdel-confirm" dir="ltr" autocomplete="off"></label><p id="srdel-err" class="err" hidden></p>
+    <div class="row end"><button class="btn danger" id="srdel-go">حذف</button></div>`;
+  $("#msg-dlg").showModal();
+  $("#srdel-go").onclick = (ev) => busy(ev.target, async () => {
+    try {
+      await api(`/api/server-routes/${host}`, { method: "DELETE", body: { confirm: $("#srdel-confirm").value.trim() } });
+      $("#msg-dlg").close(); toast("تم حذف " + host); loadServerRoutes();
+    } catch (err) { $("#srdel-err").textContent = err.message; $("#srdel-err").hidden = false; }
+  });
+});
 
 let linkPoll;
 function linkStep(n) { [1, 2, 3].forEach((i) => ($("#link-step" + i).hidden = i !== n)); }

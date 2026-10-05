@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
 
-from core import aapanel, accounts, cf, state, system
+from core import aapanel, access, accounts, cf, state, system
 
 ETC = state.ETC
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +28,31 @@ def _secret_key():
 app.secret_key = _secret_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
                   PERMANENT_SESSION_LIFETIME=60 * 60 * 12)
+
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+@app.before_request
+def access_guard():
+    """Traffic that arrived through Cloudflare (tunnel) must carry a valid
+    Cloudflare Access token for this manager's Access app — otherwise 403,
+    before any page or login form is served. SSH-forwarded localhost access
+    is unaffected."""
+    host = request.host.rsplit(":", 1)[0].lower() if not request.host.startswith("[") else "[::1]"
+    via_cf = any(h in request.headers for h in ("Cf-Ray", "Cf-Connecting-Ip", "Cf-Access-Jwt-Assertion"))
+    if host in LOCAL_HOSTS and not via_cf:
+        return None
+    route = state.find_route(state.load(), host)
+    acc = (route or {}).get("access") if (route or {}).get("kind") == "manager" else None
+    token = request.headers.get("Cf-Access-Jwt-Assertion") or request.cookies.get("CF_Authorization")
+    if not acc or not token:
+        return "Forbidden — Cloudflare Access required", 403
+    try:
+        access.verify(token, acc["team"], acc["aud"])
+    except Exception:
+        return "Forbidden — invalid Cloudflare Access token", 403
+    return None
 
 
 def api(fn):
@@ -280,6 +305,92 @@ def accounts_finish():
 @api
 def accounts_cancel():
     accounts.cancel()
+    return {"ok": True}
+
+
+# ---------- server routes: aaPanel / SSH / this manager ----------
+
+MANAGER_PORT = int(os.environ.get("OLDHOME_PORT", "8800"))
+SERVER_KINDS = {"panel": "aaPanel", "ssh": "SSH", "manager": "Old-Home"}
+
+
+def _ssh_port():
+    try:
+        import subprocess
+        out = subprocess.run(["sshd", "-T"], capture_output=True, text=True).stdout
+        return int(re.search(r"^port (\d+)", out, re.M).group(1))
+    except Exception:
+        return 22
+
+
+@app.get("/api/server-routes")
+@api
+def server_routes():
+    data = state.load()
+    rows = [{"hostname": r["hostname"], "kind": r["kind"], "label": SERVER_KINDS[r["kind"]],
+             "account": data["zones"].get(state.zone_for(data, r["hostname"]) or "", {}).get("account"),
+             "protected": bool(r.get("access")) if r["kind"] == "manager" else None,
+             "admin_path": system.panel_admin_path() if r["kind"] == "panel" else ""}
+            for r in data["routes"] if r.get("kind") in SERVER_KINDS]
+    return {"routes": rows, "zones": sorted(data["zones"])}
+
+
+@app.post("/api/server-routes")
+@api
+def add_server_route():
+    body = request.get_json(silent=True) or {}
+    kind, h = body.get("kind"), _host(body.get("hostname"))
+    if kind not in SERVER_KINDS:
+        raise ValueError("نوع غير معروف")
+    with state.LOCK:
+        data = state.load()
+        zone = state.zone_for(data, h)
+        if not zone:
+            raise ValueError("الدومين %s لا يتبع أي حساب Cloudflare مربوط" % h)
+        if state.find_route(data, h):
+            raise ValueError("هذا الرابط مستخدم مسبقاً على هذا الخادم")
+        route = {"hostname": h, "kind": kind, "label": SERVER_KINDS[kind], "locked": True}
+        if kind == "panel":
+            route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
+        elif kind == "ssh":
+            route.update(service="ssh://localhost:%d" % _ssh_port())
+        else:
+            # DNS first, NO ingress yet: the manager must stay unreachable
+            # unless Cloudflare Access is demonstrably in front of it.
+            status, _ = cf.dns_lookup(data, h)
+            cf.dns_create(data, h)
+            pr = access.probe(h, neighbours=[r["hostname"] for r in data["routes"]
+                                             if state.zone_for(data, r["hostname"]) == zone] + [zone])
+            if not pr["protected"]:
+                if status == "free":
+                    cf.dns_delete(data, h)
+                raise ValueError("لم يُفتح الرابط: Cloudflare Access لا يحمي %s بعد (%s). "
+                                 "أنشئ تطبيق Access لهذا الرابط أولاً ثم أعد المحاولة." % (h, pr["detail"]))
+            route.update(service="http://localhost:%d" % MANAGER_PORT,
+                         access={"team": pr["team"], "aud": pr["aud"]})
+        cf.dns_create(data, h)
+        data["routes"].append(route)
+        state.save(data)
+        cf.apply_config(data, data["zones"][zone]["account"])
+    return {"ok": True, "url": "https://" + h}
+
+
+@app.delete("/api/server-routes/<hostname>")
+@api
+def delete_server_route(hostname):
+    h = _host(hostname)
+    if (request.get_json(silent=True) or {}).get("confirm") != h:
+        raise ValueError("اكتب الرابط للتأكيد")
+    with state.LOCK:
+        data = state.load()
+        r = state.find_route(data, h)
+        if not r or r.get("kind") not in SERVER_KINDS:
+            raise ValueError("ليس رابط خادم")
+        account = data["zones"][state.zone_for(data, h)]["account"]
+        data["routes"].remove(r)
+        state.save(data)
+        cf.apply_config(data, account)
+        cf.dns_delete(data, h)
     return {"ok": True}
 
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
 
@@ -62,6 +62,15 @@
       </div>
       <div class="grid" id="accounts"></div>
       <p class="muted small">كل حساب Cloudflare له تونل مستقل على هذا الخادم. الدومينات في نفس الحساب تشترك في تونله.</p>
+
+      <div class="row between">
+        <h2>روابط هذا الخادم</h2>
+        <button class="btn" id="open-sr">➕ إضافة رابط</button>
+      </div>
+      <div class="card table-wrap"><table id="sr-table">
+        <thead><tr><th>الرابط</th><th>يفتح</th><th>الحساب</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
     </section>
 
     <!-- Logs -->
@@ -158,11 +167,45 @@
   </div>
 </dialog>
 
+<!-- Server route dialog -->
+<dialog id="sr-dlg">
+  <form id="sr-form" method="dialog" class="dlg">
+    <h3>🔗 رابط للخادم</h3>
+    <label>ماذا يفتح الرابط؟
+      <select id="sr-kind">
+        <option value="panel">لوحة aaPanel</option>
+        <option value="ssh">SSH</option>
+        <option value="manager">لوحة Old-Home (هذه اللوحة) — يتطلب Cloudflare Access</option>
+      </select></label>
+    <label>الرابط
+      <div class="row nowrap" dir="ltr">
+        <input id="sr-sub" placeholder="panel" required pattern="[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*" style="flex:1;min-width:0">
+        <span>.</span><select id="sr-zone"></select>
+      </div></label>
+    <div id="sr-access" class="card" style="margin-top:.75rem" hidden>
+      <b>🛡️ قبل الضغط على "إضافة" — أنشئ الحماية في Cloudflare:</b>
+      <ol class="small" style="padding-inline-start:1.2rem;margin:.5rem 0 0">
+        <li>افتح <a href="https://one.dash.cloudflare.com/" target="_blank" rel="noopener">one.dash.cloudflare.com</a> بنفس حساب الدومين (أول مرة: اختر اسم فريق والخطة المجانية Free).</li>
+        <li><b>Access ← Applications ← Add an application ← Self-hosted</b></li>
+        <li>Application domain: <b dir="ltr" id="sr-host-hint"></b></li>
+        <li>Policy: <b>Allow</b> — Include: <b>Emails</b> ← بريدك الإلكتروني ← Save</li>
+      </ol>
+      <p class="small muted" style="margin:.5rem 0 0">ستتحقق اللوحة بنفسها أن الحماية تعمل، ولن يُفتح الرابط إن لم تكن مفعّلة.</p>
+    </div>
+    <p id="sr-warn" class="small muted"></p>
+    <p id="sr-err" class="err" hidden></p>
+    <div class="row end">
+      <button type="button" class="btn ghost" data-close>إلغاء</button>
+      <button type="submit" class="btn primary" id="sr-go">إضافة</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Result dialog -->
 <dialog id="msg-dlg"><div class="dlg"><div id="msg-body"></div>
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=4"></script>
+<script src="/static/app.js?v=5"></script>
 </body>
 </html>

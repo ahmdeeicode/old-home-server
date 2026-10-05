@@ -76,6 +76,13 @@ def panel_port():
         return 0
 
 
+def panel_admin_path():
+    try:
+        return open("/www/server/panel/data/admin_path.pl").read().strip()
+    except OSError:
+        return ""
+
+
 def services():
     out = [
         {"id": "aapanel", "name": "aaPanel", "ok": _port_open(panel_port())},
