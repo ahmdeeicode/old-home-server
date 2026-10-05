@@ -138,6 +138,10 @@ echo " Open the manager from your PC:"
 echo "   ssh -L $PORT:localhost:$PORT root@$IP"
 echo "   then browse  http://localhost:$PORT"
 echo
-echo " Next: in aaPanel install LNMP (Nginx + MySQL + PHP),"
-echo "       then in the manager → الدومينات → ربط دومين"
+if ss -tln | grep -qE "[:.]80\s"; then
+  echo " Next: in the manager → الدومينات → ربط دومين"
+else
+  echo " Next: in aaPanel install LNMP (Nginx + MySQL + PHP),"
+  echo "       then in the manager → الدومينات → ربط دومين"
+fi
 echo "════════════════════════════════════════════════════════════"
