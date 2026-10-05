@@ -416,6 +416,8 @@ def add_server_route():
             raise ValueError("هذا الرابط مستخدم مسبقاً على هذا الخادم")
         route = {"hostname": h, "kind": kind, "label": SERVER_KINDS[kind], "locked": True}
         if kind == "panel":
+            if not system.panel_port():
+                raise ValueError("aaPanel غير مثبّت بعد — ثبّته من صفحة «التثبيت» ثم أضف رابطه")
             route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
         elif kind == "ssh":
             route.update(service="ssh://localhost:%d" % _ssh_port())
