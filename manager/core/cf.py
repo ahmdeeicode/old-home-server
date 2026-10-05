@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 
@@ -143,7 +144,9 @@ def apply_config(data, account):
         raise CFError("إعداد التونل غير صالح: " + (v.stderr or v.stdout).strip())
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
-    restart(account)
+    # Restart a moment later so the HTTP response reaches the browser first —
+    # the user is often connected *through* this very tunnel (SSH / Access).
+    threading.Timer(2.0, restart, args=(account,)).start()
 
 
 def restart(account):
