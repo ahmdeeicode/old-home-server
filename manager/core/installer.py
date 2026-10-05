@@ -49,7 +49,10 @@ def start(command):
     os.makedirs("/etc/oldhome", mode=0o700, exist_ok=True)
     with open(LOG, "w") as f:
         f.write("")
+    # KillMode=process: when the wrapper exits, systemd must NOT kill the
+    # daemons the official installer started inside this transient unit.
     subprocess.run(["systemd-run", "--unit", UNIT, "--collect", "--quiet",
+                    "--property=KillMode=process",
                     "/bin/bash", WRAPPER, url] + args, check=True)
     return {"url": url, "args": args}
 

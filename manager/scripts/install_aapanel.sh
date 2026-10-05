@@ -24,6 +24,14 @@ echo running > "$STATUS"
   if [ -d /www/server/panel ] && command -v btpython >/dev/null; then
     echo "== enabling aaPanel API for the manager (127.0.0.1 only)"
     btpython "$HERE/enable_aapanel_api.py"
+    # Hand aaPanel over to its own systemd service (btpanel) so it lives in
+    # its own cgroup — not this transient installer unit — and starts on boot.
+    if systemctl cat btpanel >/dev/null 2>&1; then
+      echo "== starting aaPanel via its service (btpanel)"
+      systemctl enable btpanel >/dev/null 2>&1
+      /etc/init.d/bt stop >/dev/null 2>&1
+      systemctl restart btpanel && echo "== btpanel: $(systemctl is-active btpanel)"
+    fi
   fi
 } >>"$LOG" 2>&1
 
