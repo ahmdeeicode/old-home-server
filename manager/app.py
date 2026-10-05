@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
 
-from core import aapanel, access, accounts, cf, installer, state, system
+from core import aapanel, access, accounts, cf, direct, installer, state, system
 
 ETC = state.ETC
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,6 +31,7 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict"
 
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+DIRECT = os.environ.get("OLDHOME_DIRECT") == "1"   # the 0.0.0.0:8443 HTTPS listener
 
 
 @app.before_request
@@ -38,7 +39,13 @@ def access_guard():
     """Traffic that arrived through Cloudflare (tunnel) must carry a valid
     Cloudflare Access token for this manager's Access app — otherwise 403,
     before any page or login form is served. SSH-forwarded localhost access
-    is unaffected."""
+    is unaffected. The direct-by-IP listener (OLDHOME_DIRECT) is filtered by
+    the chosen mode: lan = private networks only, public = anyone."""
+    if DIRECT:
+        mode = direct.mode()
+        if mode == "public" or (mode == "lan" and direct.is_private(request.remote_addr)):
+            return None
+        return "Forbidden — direct access is not allowed from %s" % request.remote_addr, 403
     host = request.host.rsplit(":", 1)[0].lower() if not request.host.startswith("[") else "[::1]"
     via_cf = any(h in request.headers for h in ("Cf-Ray", "Cf-Connecting-Ip", "Cf-Access-Jwt-Assertion"))
     if host in LOCAL_HOSTS and not via_cf:
@@ -82,16 +89,30 @@ def _host(value):
 
 # ---------- auth ----------
 
+_fails = {}  # ip -> [timestamps of failed logins]
+MAX_FAILS, WINDOW = 5, 15 * 60
+
+
 @app.post("/api/login")
 def login():
+    import time
+    ip = request.remote_addr or "?"
+    now = time.time()
+    recent = [t for t in _fails.get(ip, []) if now - t < WINDOW]
+    if len(recent) >= MAX_FAILS:
+        wait = int((WINDOW - (now - recent[0])) / 60) + 1
+        return jsonify(error="محاولات خاطئة كثيرة — حاول بعد %d دقيقة" % wait), 429
     pw = (request.get_json(silent=True) or {}).get("password", "")
     hashed = open(os.path.join(ETC, "manager_password.hash")).read().strip()
     if check_password_hash(hashed, pw):
+        _fails.pop(ip, None)
         session.clear()
         session["ok"] = True
         session.permanent = True
         return jsonify(ok=True)
-    return jsonify(error="كلمة المرور غير صحيحة"), 401
+    recent.append(now)
+    _fails[ip] = recent
+    return jsonify(error="كلمة المرور غير صحيحة (%d/%d)" % (len(recent), MAX_FAILS)), 401
 
 
 @app.post("/api/logout")
@@ -419,6 +440,18 @@ def logs():
         names = [s["name"] for s in aapanel.list_sites()]
         return {"sources": system.log_sources(list(data["accounts"]), names)}
     return {"text": system.read_log(src, request.args.get("lines", 200))}
+
+
+@app.get("/api/settings/direct")
+@api
+def direct_get():
+    return direct.info()
+
+
+@app.post("/api/settings/direct")
+@api
+def direct_set():
+    return direct.set_mode((request.get_json(silent=True) or {}).get("mode"))
 
 
 @app.post("/api/settings/realip")

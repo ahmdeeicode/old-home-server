@@ -3,6 +3,7 @@
   python3 cli.py import         # build state.json from existing /etc/cloudflared/*/config.yml
   python3 cli.py set-password   # set (or reset) the manager login password
   python3 cli.py apply          # regenerate every tunnel config from state.json and restart
+  python3 cli.py direct [off|lan|public|auto]   # direct HTTPS access by IP on :8443
 """
 import getpass
 import glob
@@ -79,8 +80,17 @@ def cmd_apply():
         print("applied", account)
 
 
+def cmd_direct():
+    from core import direct
+    m = sys.argv[2] if len(sys.argv) > 2 else "auto"
+    if m == "auto":
+        m = direct.default_mode()
+    i = direct.set_mode(m)
+    print("direct access:", i["mode"], *i["urls"]) if i["mode"] != "off" else print("direct access: off")
+
+
 if __name__ == "__main__":
-    cmds = {"import": cmd_import, "set-password": cmd_set_password, "apply": cmd_apply}
+    cmds = {"import": cmd_import, "set-password": cmd_set_password, "apply": cmd_apply, "direct": cmd_direct}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds:
         print(__doc__)
         sys.exit(1)

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=6">
+<link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body>
 
@@ -110,6 +110,14 @@
 
     <!-- Settings -->
     <section data-pane="settings" hidden>
+      <div class="card" style="margin-bottom:.75rem">
+        <h3>🌐 فتح اللوحة مباشرة بعنوان الخادم</h3>
+        <p class="muted small" style="margin:0 0 .5rem">على المنفذ 8443 عبر HTTPS (أول مرة: Advanced ← Proceed). بعد 5 محاولات دخول خاطئة يُحظر العنوان 15 دقيقة.</p>
+        <label class="check"><input type="radio" name="direct" value="off"> مغلق — عبر SSH أو رابط Cloudflare Access فقط</label>
+        <label class="check"><input type="radio" name="direct" value="lan"> الشبكة المحلية فقط — يُرفض أي جهاز من خارج شبكتك المنزلية</label>
+        <label class="check"><input type="radio" name="direct" value="public"> عام — أي شخص يعرف العنوان يرى صفحة الدخول (للخوادم السحابية)</label>
+        <div id="direct-urls" class="small" dir="ltr" style="margin-top:.5rem;text-align:right"></div>
+      </div>
       <div class="card setting">
         <div>
           <h3>عناوين IP الحقيقية للزوار</h3>
@@ -231,6 +239,6 @@
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=6"></script>
+<script src="/static/app.js?v=7"></script>
 </body>
 </html>

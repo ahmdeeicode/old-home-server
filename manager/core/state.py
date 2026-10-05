@@ -1,16 +1,47 @@
 """Persistent state: /etc/oldhome/state.json is the single source of truth.
 
 Tunnel config.yml files are generated from it, never edited by hand.
+LOCK is held across load→modify→save; it is re-entrant within a thread and
+also takes an flock, because the localhost and the direct-HTTPS managers are
+two separate processes sharing this file.
 """
+import fcntl
 import json
 import os
 import threading
 
 ETC = "/etc/oldhome"
 STATE_FILE = os.path.join(ETC, "state.json")
-LOCK = threading.RLock()
+LOCK_FILE = os.path.join(ETC, ".state.lock")
 
 DEFAULT = {"accounts": {}, "zones": {}, "routes": []}
+
+
+class _Lock:
+    def __init__(self):
+        self._t = threading.RLock()
+        self._depth = 0
+        self._fd = None
+
+    def __enter__(self):
+        self._t.acquire()
+        if self._depth == 0:
+            os.makedirs(ETC, mode=0o700, exist_ok=True)
+            self._fd = os.open(LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o600)
+            fcntl.flock(self._fd, fcntl.LOCK_EX)
+        self._depth += 1
+        return self
+
+    def __exit__(self, *exc):
+        self._depth -= 1
+        if self._depth == 0:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            os.close(self._fd)
+            self._fd = None
+        self._t.release()
+
+
+LOCK = _Lock()
 
 
 def load():

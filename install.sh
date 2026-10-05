@@ -38,7 +38,7 @@ fi
 
 step "System packages"
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git sqlite3 python3-flask python3-yaml python3-jwt python3-cryptography gunicorn >/dev/null
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git sqlite3 python3-flask python3-yaml python3-jwt python3-cryptography gunicorn openssl >/dev/null
 ok "curl git sqlite3 flask gunicorn"
 
 step "aaPanel"
@@ -127,6 +127,15 @@ systemctl enable oldhome-manager >/dev/null 2>&1
 systemctl restart oldhome-manager
 ok "running on 127.0.0.1:$PORT"
 
+step "Direct access by IP (https://<ip>:8443)"
+if [ ! -f /etc/oldhome/direct.json ]; then
+  # private IP → LAN-only, public IP → public (login throttled); change in الإعدادات
+  (cd "$DIR/manager" && python3 cli.py direct "${OLDHOME_DIRECT_MODE:-auto}") | sed 's/^/    /'
+else
+  systemctl is-enabled -q oldhome-manager-direct 2>/dev/null && systemctl restart oldhome-manager-direct
+  ok "mode: $(python3 -c 'import json;print(json.load(open("/etc/oldhome/direct.json"))["mode"])')"
+fi
+
 IP=$(hostname -I | awk '{print $1}')
 echo
 echo "════════════════════════════════════════════════════════════"
@@ -144,7 +153,13 @@ if [ -n "$NEW_PW" ]; then
 else
   echo " Manager password:  unchanged (reset: cd $DIR/manager && python3 cli.py set-password)"
 fi
-echo " Open the manager from your PC:"
+DMODE=$(python3 -c 'import json;print(json.load(open("/etc/oldhome/direct.json"))["mode"])' 2>/dev/null || echo off)
+if [ "$DMODE" != off ]; then
+  echo " Open the manager in your browser ($DMODE):"
+  for ip in $(hostname -I); do case "$ip" in *:*) ;; *) echo "   https://$ip:8443";; esac; done
+  echo "   (first visit: Advanced → Proceed — self-signed certificate)"
+fi
+echo " Or through SSH from your PC:"
 echo "   ssh -L $PORT:localhost:$PORT root@$IP"
 echo "   then browse  http://localhost:$PORT"
 echo

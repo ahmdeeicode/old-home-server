@@ -362,7 +362,17 @@ $("#log-refresh").addEventListener("click", loadLog);
 // ---------- settings ----------
 async function loadSettings() {
   try { const d = await api("/api/overview"); $("#realip").checked = d.realip; } catch (e) { toast(e.message, true); }
+  try { showDirect(await api("/api/settings/direct")); } catch (e) { toast(e.message, true); }
 }
+function showDirect(d) {
+  $$('input[name="direct"]').forEach((r) => (r.checked = r.value === d.mode));
+  $("#direct-urls").innerHTML = d.mode === "off" ? "" :
+    d.urls.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join("<br>") + (d.active ? "" : " ⚠️ الخدمة متوقفة");
+}
+$$('input[name="direct"]').forEach((r) => r.addEventListener("change", async () => {
+  try { showDirect(await api("/api/settings/direct", { method: "POST", body: { mode: r.value } })); toast("تم الحفظ ✓"); }
+  catch (err) { toast(err.message, true); loadSettings(); }
+}));
 $("#realip").addEventListener("change", async (e) => {
   const want = e.target.checked;
   try { await api("/api/settings/realip", { method: "POST", body: { enable: want } }); toast(want ? "تم التفعيل ✓" : "تم الإيقاف"); }
