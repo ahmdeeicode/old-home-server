@@ -111,3 +111,13 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   padding: .6rem 1rem; border-radius: 8px; z-index: 20; max-width: calc(100vw - 32px);
 }
 #toast.bad { background: var(--bad); color: #fff; }
+
+.copy { display: flex; gap: .4rem; align-items: center; }
+.copy pre { flex: 1; min-width: 0; margin: 0; padding: .35rem .5rem; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all; text-align: left; }
+.kv { width: 100%; font-size: .85rem; }
+.kv td { white-space: normal; vertical-align: middle; padding: .4rem .3rem; }
+.kv td:first-child { color: var(--muted); width: 40%; }
+.dlg h4 { margin: 1rem 0 .4rem; font-size: .9rem; }
+.dlg code { background: var(--bg); padding: 0 .3rem; border-radius: 4px; }
+#msg-dlg { width: min(640px, calc(100vw - 32px)); }

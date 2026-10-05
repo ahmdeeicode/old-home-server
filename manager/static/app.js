@@ -249,11 +249,43 @@ async function loadServerRoutes() {
       const link = href ? `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr">${esc(x.hostname)}</a>` : `<span dir="ltr">${esc(x.hostname)}</span>`;
       const prot = x.kind === "manager" ? (x.protected ? " 🛡️" : x.password_only ? " 🔑" : " ⚠️") : "";
       return `<tr><td>${link}${prot}</td><td>${esc(x.label)}</td><td>${esc(x.account || "—")}</td>
-        <td><div class="actions"><button class="btn small ghost" data-srdel="${esc(x.hostname)}" data-kind="${esc(x.kind)}">حذف</button></div></td></tr>`;
+        <td><div class="actions">${x.kind === "ssh" ? `<button class="btn small primary" data-sshhelp="${esc(x.hostname)}">طريقة الاتصال</button>` : ""}<button class="btn small ghost" data-srdel="${esc(x.hostname)}" data-kind="${esc(x.kind)}">حذف</button></div></td></tr>`;
     }).join("") || `<tr><td colspan="4" class="muted">لا توجد روابط — أضف رابطاً للوحة aaPanel أو SSH.</td></tr>`;
   } catch (e) { tb.innerHTML = ""; toast(e.message, true); }
 }
 let srZones = [], srPanel = false;
+
+// ----- "how to connect" for an SSH link -----
+const copyBox = (text) => `<div class="copy"><pre dir="ltr">${esc(text)}</pre><button type="button" class="btn small" data-copy="${esc(text)}">نسخ</button></div>`;
+function sshHelp(host) {
+  const exe = '"C:\\Program Files (x86)\\cloudflared\\cloudflared.exe"';
+  $("#msg-body").innerHTML = `<h3>🔐 الاتصال بـ <span dir="ltr">${esc(host)}</span></h3>
+    <p class="small muted">يحتاج جهازك <b>cloudflared</b> مرة واحدة: <code>winget install Cloudflare.cloudflared</code> — ولمعرفة مساره: <code>where cloudflared</code></p>
+    <h4>PuTTY</h4>
+    <table class="kv"><tbody>
+      <tr><td>Session ← Host Name</td><td>${copyBox(host)}</td></tr>
+      <tr><td>Session ← Port</td><td dir="ltr">22</td></tr>
+      <tr><td>Connection ← Proxy ← Proxy type</td><td dir="ltr">Local</td></tr>
+      <tr><td>Connection ← Proxy ← local proxy command</td><td>${copyBox(exe + " access ssh --hostname %host")}</td></tr>
+      <tr><td>Connection ← Data ← Auto-login username</td><td dir="ltr">root</td></tr>
+      <tr><td>Session ← Saved Sessions</td><td>اكتب اسماً ← <b>Save</b> ← <b>Open</b></td></tr>
+    </tbody></table>
+    <h4>PowerShell / CMD</h4>
+    ${copyBox('ssh -o ProxyCommand="cloudflared access ssh --hostname %h" root@' + host)}
+    <h4>ملف ‎.ssh\\config (اختياري — بعده يكفي <code dir="ltr">ssh ${esc(host)}</code>)</h4>
+    ${copyBox("Host " + host + "\n  ProxyCommand cloudflared access ssh --hostname %h\n  User root")}`;
+  $("#msg-dlg").showModal();
+}
+document.addEventListener("click", async (e) => {
+  const h = e.target.closest("[data-sshhelp]");
+  if (h) return sshHelp(h.dataset.sshhelp);
+  const c = e.target.closest("[data-copy]");
+  if (c) {
+    try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = "✓ نُسخ"; }
+    catch (_) { const r = document.createRange(); r.selectNodeContents(c.previousElementSibling); getSelection().removeAllRanges(); getSelection().addRange(r); c.textContent = "حدّد ← Ctrl+C"; }
+    setTimeout(() => (c.textContent = "نسخ"), 1500);
+  }
+});
 const srHost = () => $("#sr-sub").value.trim().toLowerCase() + "." + $("#sr-zone").value;
 function srUpdate() {
   const k = $("#sr-kind").value;
