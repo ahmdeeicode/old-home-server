@@ -22,16 +22,13 @@ curl -fsSL https://raw.githubusercontent.com/ahmdeeicode/old-home-server/main/bo
 
 ## 🆕 التثبيت على خادم جديد (Ubuntu/Debian)
 ```bash
-# 1. ربط GitHub (مرة واحدة) — يعطيك كوداً ورابطاً تفتحه في المتصفح
-sudo apt-get install -y gh git && gh auth login
+# 1. تنزيل المشروع
+sudo apt-get install -y git && sudo git clone https://github.com/ahmdeeicode/old-home-server.git /opt/oldhome
 
-# 2. تنزيل المشروع
-sudo gh repo clone ahmdeeicode/old-home-server /opt/oldhome
-
-# 3. فحص (للقراءة فقط، لا يغيّر شيئاً): يعرض ما سيحدث والتعارضات المحتملة
+# 2. فحص (للقراءة فقط، لا يغيّر شيئاً): يعرض ما سيحدث والتعارضات المحتملة
 sudo bash /opt/oldhome/install.sh --check
 
-# 4. التثبيت (يعيد الفحص أولاً: يتوقف عند المشاكل، ويطلب تأكيدك عند التنبيهات)
+# 3. التثبيت (يعيد الفحص أولاً: يتوقف عند المشاكل، ويطلب تأكيدك عند التنبيهات)
 sudo bash /opt/oldhome/install.sh
 ```
 **على خادم عليه aaPanel مسبقاً:** لا يُعاد تثبيت aaPanel، والمواقع لا تُمس. إذا كانت الـ API مفعّلة فيُعاد استخدام نفس مفتاحها، فلا يتعطل أي تطبيق يستخدمها.
