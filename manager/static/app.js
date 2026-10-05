@@ -151,7 +151,7 @@ async function loadSites() {
 document.addEventListener("click", async (e) => {
   const pub = e.target.closest("[data-pub]"), unpub = e.target.closest("[data-unpub]"), del = e.target.closest("[data-del]");
   if (pub) await busy(pub, async () => {
-    try { const r = await api(`/api/sites/${pub.dataset.pub}/publish`, { method: "POST" }); toast("تم النشر: " + r.url); loadSites(); }
+    try { const r = await api(`/api/sites/${pub.dataset.pub}/publish`, { method: "POST" }); toast("تم النشر: " + r.url + " — يعمل خلال ~30 ثانية"); loadSites(); }
     catch (err) { toast(err.message, true); }
   });
   if (unpub) await busy(unpub, async () => {
@@ -195,7 +195,7 @@ $("#add-form").addEventListener("submit", async (e) => {
       const r = await api("/api/sites", { method: "POST", body: { hostname: addHost(), php: $("#add-php").value, db: $("#add-db").checked, note: $("#add-note").value } });
       $("#add-dlg").close();
       let html = `<h3>🎉 الموقع جاهز</h3><p><a href="${esc(r.url)}" target="_blank" rel="noopener" dir="ltr">${esc(r.url)}</a></p>
-        <p class="muted small">قد يستغرق ظهوره دقيقة حتى ينتشر سجل DNS.</p>`;
+        <p class="muted small">انتظر حوالي 30 ثانية قبل فتحه (إعادة تشغيل التونل وانتشار DNS) — قد تظهر رسالة Error 1033 مؤقتاً.</p>`;
       if (r.db) html += `<p><b>بيانات قاعدة البيانات — احفظها الآن:</b></p><div class="creds">DB: ${esc(r.db.name)}<br>User: ${esc(r.db.user)}<br>Pass: ${esc(r.db.password)}</div>`;
       $("#msg-body").innerHTML = html; $("#msg-dlg").showModal();
       loadSites();
@@ -316,7 +316,7 @@ $("#sr-form").addEventListener("submit", async (e) => {
   await busy(btn, async () => {
     try {
       const r = await api("/api/server-routes", { method: "POST", body: { kind: $("#sr-kind").value, hostname: srHost(), protection } });
-      $("#sr-dlg").close(); toast("تمت الإضافة: " + r.url); loadServerRoutes();
+      $("#sr-dlg").close(); toast("تمت الإضافة: " + r.url + " — يعمل خلال ~30 ثانية (إعادة تشغيل التونل)"); loadServerRoutes();
     } catch (err) { $("#sr-err").textContent = err.message; $("#sr-err").hidden = false; }
   });
   btn.textContent = label;
