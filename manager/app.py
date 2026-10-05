@@ -132,6 +132,9 @@ def sites():
     for row in rows:
         if row["kind"] == "site" and row["panel"]:
             row["http"] = system.site_http_status(row["hostname"])
+            # Force HTTPS was switched on after publishing → :80 route would loop
+            row["needs_fix"] = bool(row["published"] and row.get("service", "").startswith("http://")
+                                    and system.site_force_https(row["hostname"]))
     return {"sites": rows, "zones": sorted(data["zones"]), "php": aapanel.php_versions()}
 
 
@@ -146,13 +149,22 @@ def dns_check():
     return {"status": st, "record": rec and {"type": rec["type"], "content": rec["content"]}}
 
 
-def _publish(data, hostname, service="http://localhost:80", kind="site", label=""):
+def _publish(data, hostname, label=""):
+    """Route a website through the tunnel (or re-sync its route after its
+    SSL settings changed). The origin follows the site's Force-HTTPS state."""
     zone = state.zone_for(data, hostname)
     if not zone:
         raise ValueError("الدومين %s لا يتبع أي حساب Cloudflare مربوط" % hostname)
     cf.dns_create(data, hostname)  # raises if the name belongs to something else
-    if not state.find_route(data, hostname):
-        data["routes"].append({"hostname": hostname, "service": service, "kind": kind, "label": label})
+    route = state.find_route(data, hostname)
+    if route and route.get("locked"):
+        raise ValueError("هذا المسار محمي")
+    if not route:
+        route = {"hostname": hostname, "kind": "site", "label": label}
+        data["routes"].append(route)
+    for k in ("service", "no_tls_verify", "origin_server_name"):
+        route.pop(k, None)
+    route.update(system.site_origin(hostname))
     state.save(data)
     cf.apply_config(data, data["zones"][zone]["account"])
 

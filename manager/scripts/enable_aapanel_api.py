@@ -20,10 +20,25 @@ cfg_path = os.path.join(PANEL, "config", "api.json")
 data = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {"open": False, "token": "", "limit_addr": []}
 port = open(os.path.join(PANEL, "data", "port.pl")).read().strip()
 
+def _valid(key):
+    return bool(key) and bool(data.get("token")) and public.md5(key) == data["token"]
+
+
 sk = None
-if os.path.exists(CRED) and data.get("open") and data.get("token"):
+# 1) the key we stored earlier
+if os.path.exists(CRED):
     sk = json.load(open(CRED)).get("key")
-    if sk and public.md5(sk) != data["token"]:
+    if not _valid(sk):
+        sk = None
+# 2) a key the owner already set up in aaPanel (phone app, scripts…): reuse it,
+#    never regenerate — that would silently break whatever uses it
+if not sk and data.get("token_crypt"):
+    sk = public.de_crypt(data["token"], data["token_crypt"])
+    if isinstance(sk, bytes):
+        sk = sk.decode("utf-8", "ignore")
+    if _valid(sk):
+        print("reusing the existing aaPanel API key")
+    else:
         sk = None
 
 if not sk:

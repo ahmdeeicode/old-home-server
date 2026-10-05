@@ -119,9 +119,12 @@ def render_config(data, account):
         lines.append("  # %s" % (r.get("label") or r.get("kind", "site")))
         lines.append("  - hostname: %s" % r["hostname"])
         lines.append("    service: %s" % r["service"])
-        if r.get("no_tls_verify"):
+        if r.get("no_tls_verify") or r.get("origin_server_name"):
             lines.append("    originRequest:")
-            lines.append("      noTLSVerify: true")
+            if r.get("no_tls_verify"):
+                lines.append("      noTLSVerify: true")
+            if r.get("origin_server_name"):
+                lines.append("      originServerName: %s" % r["origin_server_name"])
     lines.append("  - service: http_status:404")
     return "\n".join(lines) + "\n"
 

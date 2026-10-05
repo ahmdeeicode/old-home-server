@@ -105,11 +105,13 @@ async function loadSites() {
     if (!s.published) status = `<span class="dot warn"></span>غير منشور`;
     else if (s.kind !== "site") status = `<span class="dot ok"></span>منشور`;
     else if (!s.panel) status = `<span class="dot warn"></span>غير موجود في aaPanel`;
+    else if (s.needs_fix) status = `<span class="dot warn"></span>Force HTTPS مُفعّل — يحتاج إصلاح`;
     else status = `<span class="dot ${/^[23]/.test(s.http) ? "ok" : ""}"></span>منشور · ${esc(s.http)}`;
     let actions = "";
     if (!s.locked) {
       if (!s.published && s.publishable) actions += `<button class="btn small primary" data-pub="${esc(s.hostname)}">نشر</button>`;
       if (!s.published && !s.publishable) actions += `<span class="muted small">الدومين غير مربوط بحساب</span>`;
+      if (s.needs_fix) actions += `<button class="btn small primary" data-pub="${esc(s.hostname)}" title="توجيه التونل إلى المنفذ 443">إصلاح</button>`;
       if (s.published) actions += `<button class="btn small ghost" data-unpub="${esc(s.hostname)}">إلغاء النشر</button>`;
       actions += `<button class="btn small ghost" data-del="${esc(s.hostname)}">حذف</button>`;
     } else actions = `<span class="muted small">🔒 محمي</span>`;

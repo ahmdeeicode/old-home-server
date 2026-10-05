@@ -108,6 +108,23 @@ def restart_service(sid):
     return r.returncode == 0, (r.stdout + r.stderr)[-2000:]
 
 
+def site_force_https(hostname):
+    """True when aaPanel's "Force HTTPS" is on: port 80 just redirects to 443,
+    so a tunnel pointed at :80 would loop forever."""
+    try:
+        with open("/www/server/panel/vhost/nginx/%s.conf" % hostname) as f:
+            return "HTTP_TO_HTTPS_START" in f.read()
+    except OSError:
+        return False
+
+
+def site_origin(hostname):
+    """Tunnel route settings that work for this site's current SSL setup."""
+    if site_force_https(hostname):
+        return {"service": "https://localhost:443", "no_tls_verify": True, "origin_server_name": hostname}
+    return {"service": "http://localhost:80"}
+
+
 def site_http_status(hostname):
     """Ask nginx directly (bypasses DNS) whether it serves this host."""
     r = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "5",

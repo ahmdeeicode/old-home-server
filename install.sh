@@ -2,7 +2,8 @@
 # Old-Home: set up a server from scratch, or update an existing one.
 # Safe to re-run — every step skips itself if already done.
 #
-#   sudo bash install.sh
+#   sudo bash install.sh            # check, then install
+#   sudo bash install.sh --check    # read-only report, changes nothing
 #
 # Steps: packages → aaPanel → cloudflared → tunnel service template →
 #        aaPanel API (localhost only) → manager state/password → manager service
@@ -20,8 +21,20 @@ step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
 
 [ "$(id -u)" = 0 ] || { echo "Run as root: sudo bash $0"; exit 1; }
-. /etc/os-release
-case "$ID" in ubuntu|debian) ;; *) echo "Unsupported OS: $ID (Ubuntu/Debian only)"; exit 1;; esac
+
+# Read-only preflight first. `--check` stops here; otherwise blockers abort and
+# warnings need confirmation (OLDHOME_YES=1 to skip the prompt).
+set +e
+bash "$DIR/manager/scripts/preflight.sh"
+PF=$?
+set -e
+[ "${1:-}" = "--check" ] && exit $PF
+if [ $PF -eq 2 ]; then
+  echo "Aborted: fix the blockers above first."; exit 1
+elif [ $PF -eq 1 ] && [ "${OLDHOME_YES:-}" != 1 ]; then
+  read -r -p "توجد تنبيهات أعلاه. هل تريد المتابعة؟ (yes/no): " ans </dev/tty
+  [ "$ans" = "yes" ] || { echo "Cancelled — nothing was changed."; exit 1; }
+fi
 
 step "System packages"
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
