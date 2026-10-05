@@ -18,7 +18,7 @@ echo running > "$STATUS"
   YES=""
   grep -q -- '-y)' "$SCRIPT" && YES="-y"     # unattended flag, when the script supports it
   echo "== running: bash $(basename "$SCRIPT") $* $YES"
-  yes y | bash "$SCRIPT" "$@" $YES
+  yes y 2>/dev/null | bash "$SCRIPT" "$@" $YES
   rc=$?
   echo "== installer exit code $rc"
   if [ -d /www/server/panel ] && command -v btpython >/dev/null; then
