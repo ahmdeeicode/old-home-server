@@ -12,6 +12,14 @@
 | `install.sh` | تثبيت كامل لخادم جديد، أو تحديث خادم موجود |
 | `manager/scripts/enable_aapanel_api.py` | تفعيل API الخاصة بـ aaPanel للجهاز المحلي فقط (يعمل بـ btpython) |
 
+## ⚡ الطريقة الأسهل: أمر واحد بعد تثبيت Ubuntu مباشرة
+```bash
+curl -fsSL https://raw.githubusercontent.com/ahmdeeicode/old-home-server/main/bootstrap.sh | sudo bash
+```
+ينفّذ هذا الأمر: تفعيل SSH ← تفعيل حساب root (يطلب كلمة مروره) والسماح بدخوله عبر SSH ← تثبيت اللوحة.
+بعدها **كل شيء من الواجهة**: صفحة **التثبيت** ← الصق أمر aaPanel الرسمي من aapanel.com ← تشاهد التقدم مباشرة ← تظهر بيانات الدخول.
+(لا يُنفَّذ النص الملصوق كما هو: تستخرج اللوحة رابط `www.aapanel.com/script/*.sh` فقط مع خيارات بسيطة، وترفض أي شيء مشبوه.)
+
 ## 🆕 التثبيت على خادم جديد (Ubuntu/Debian)
 ```bash
 # 1. ربط GitHub (مرة واحدة) — يعطيك كوداً ورابطاً تفتحه في المتصفح

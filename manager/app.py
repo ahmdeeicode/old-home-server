@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
 
-from core import aapanel, access, accounts, cf, state, system
+from core import aapanel, access, accounts, cf, installer, state, system
 
 ETC = state.ETC
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -392,6 +392,20 @@ def delete_server_route(hostname):
         cf.apply_config(data, account)
         cf.dns_delete(data, h)
     return {"ok": True}
+
+
+# ---------- setup: install aaPanel from the official command ----------
+
+@app.get("/api/setup")
+@api
+def setup_status():
+    return installer.status()
+
+
+@app.post("/api/setup/aapanel")
+@api
+def setup_aapanel():
+    return installer.start((request.get_json(silent=True) or {}).get("command", ""))
 
 
 # ---------- logs & settings ----------

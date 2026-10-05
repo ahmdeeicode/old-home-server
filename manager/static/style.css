@@ -70,6 +70,8 @@ td a { color: var(--primary); text-decoration: none; }
 .tag { font-size: .75rem; padding: .1rem .5rem; border-radius: 99px; background: var(--line); }
 .actions { display: flex; gap: .35rem; justify-content: flex-end; }
 
+textarea { font: 13px/1.5 ui-monospace, Consolas, monospace; width: 100%; resize: vertical;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .6rem; }
 input, select {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
   border-radius: 8px; padding: .45rem .6rem; width: 100%;

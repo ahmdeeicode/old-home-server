@@ -44,6 +44,8 @@ ok "curl git sqlite3 flask gunicorn"
 step "aaPanel"
 if [ -d /www/server/panel ]; then
   ok "already installed"
+elif [ "${OLDHOME_SKIP_AAPANEL:-}" = 1 ]; then
+  ok "skipped — install it later from the manager (التثبيت page)"
 else
   echo "    installing (5–10 min, log: $LOG)…"
   curl -fsSL "$AAPANEL_URL" -o /tmp/aapanel_install.sh
@@ -87,7 +89,11 @@ ok "ready"
 
 step "aaPanel API (127.0.0.1 only)"
 install -d -m 700 /etc/oldhome
-btpython "$DIR/manager/scripts/enable_aapanel_api.py"
+if [ -d /www/server/panel ] && command -v btpython >/dev/null; then
+  btpython "$DIR/manager/scripts/enable_aapanel_api.py"
+else
+  ok "aaPanel not installed yet — the manager enables the API right after installing it"
+fi
 
 step "Manager state"
 if [ ! -f /etc/oldhome/state.json ]; then
@@ -126,8 +132,12 @@ echo
 echo "════════════════════════════════════════════════════════════"
 echo " Old-Home is ready"
 echo "════════════════════════════════════════════════════════════"
-echo " aaPanel login:"
-bt default 2>/dev/null | grep -Ei "address|username|password" | sed 's/^/   /' || true
+if [ -d /www/server/panel ]; then
+  echo " aaPanel login:"
+  bt default 2>/dev/null | grep -Ei "address|username|password" | sed 's/^/   /' || true
+else
+  echo " aaPanel: not installed — open the manager → التثبيت → paste the official command"
+fi
 echo
 if [ -n "$NEW_PW" ]; then
   echo " Manager password:  $NEW_PW   (save it now)"

@@ -21,7 +21,14 @@ def _md5(s):
     return hashlib.md5(s.encode()).hexdigest()
 
 
+def available():
+    """aaPanel installed and its API key stored for the manager."""
+    return os.path.isdir("/www/server/panel") and os.path.exists(CRED_FILE)
+
+
 def call(endpoint, **params):
+    if not available():
+        raise PanelError("aaPanel غير مثبّت بعد — ثبّته من صفحة «التثبيت»")
     with open(CRED_FILE) as f:
         cred = json.load(f)
     t = str(int(time.time()))
@@ -39,6 +46,8 @@ def call(endpoint, **params):
 
 
 def list_sites():
+    if not available():
+        return []
     res = call("/data?action=getData", table="sites", limit=500, p=1)
     return [{"id": s["id"], "name": s["name"], "path": s["path"],
              "status": str(s.get("status")) == "1", "php": s.get("php_version", ""),

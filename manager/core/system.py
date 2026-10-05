@@ -85,7 +85,8 @@ def panel_admin_path():
 
 def services():
     out = [
-        {"id": "aapanel", "name": "aaPanel", "ok": _port_open(panel_port())},
+        {"id": "aapanel", "name": "aaPanel" if panel_port() else "aaPanel (غير مثبّت)",
+         "ok": bool(panel_port()) and _port_open(panel_port())},
         {"id": "nginx", "name": "Nginx", "ok": _port_open(80)},
         {"id": "mysqld", "name": "MySQL / MariaDB", "ok": _port_open(3306)},
         {"id": "ssh", "name": "SSH", "ok": _port_open(22)},

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=5">
+<link rel="stylesheet" href="/static/style.css?v=6">
 </head>
 <body>
 
@@ -23,6 +23,7 @@
     <div class="brand">🏠 <b>Old-Home</b> <span id="hostname" class="muted"></span></div>
     <nav id="tabs">
       <button data-tab="dash" class="on">الرئيسية</button>
+      <button data-tab="setup">التثبيت</button>
       <button data-tab="sites">المواقع</button>
       <button data-tab="domains">الدومينات</button>
       <button data-tab="logs">السجلات</button>
@@ -39,6 +40,30 @@
       <div class="grid" id="services"></div>
       <h2>التونلات (Cloudflare)</h2>
       <div class="grid" id="tunnels"></div>
+    </section>
+
+    <!-- Setup -->
+    <section data-pane="setup" hidden>
+      <h2>📦 لوحة aaPanel</h2>
+      <div class="card" id="ap-installed" hidden>
+        <div class="svc"><b><span class="dot ok"></span>aaPanel مثبّت <span id="ap-ver" class="muted small"></span></b></div>
+        <p class="muted small" style="margin:.5rem 0 0">من الشبكة المنزلية: <a id="ap-lan" target="_blank" rel="noopener" dir="ltr"></a></p>
+        <p class="muted small" style="margin:.25rem 0 0">للوصول من الإنترنت: الدومينات ← روابط هذا الخادم ← إضافة رابط ← لوحة aaPanel.</p>
+        <p class="muted small" style="margin:.25rem 0 0">الخطوة التالية: ادخل aaPanel وثبّت <b>LNMP</b> (اختر Fast).</p>
+      </div>
+      <div class="card" id="ap-form" hidden>
+        <p style="margin-top:0">1. افتح صفحة التثبيت الرسمية: <a href="https://www.aapanel.com/new/download.html" target="_blank" rel="noopener">aapanel.com ↗</a> وانسخ أمر <b>Ubuntu/Debian</b>.</p>
+        <p>2. الصقه هنا:</p>
+        <textarea id="ap-cmd" dir="ltr" rows="4" placeholder="URL=https://www.aapanel.com/script/install_panel_en.sh && ... bash install_panel_en.sh ipssl"></textarea>
+        <p class="muted small">🔒 لا يُنفَّذ النص كما هو: تستخرج اللوحة رابط السكربت الرسمي فقط (aapanel.com) وتشغّله بنفسها.</p>
+        <p id="ap-err" class="err" hidden></p>
+        <div class="row end"><button class="btn primary" id="ap-go">تثبيت aaPanel</button></div>
+      </div>
+      <div class="card" id="ap-job" hidden>
+        <div class="svc"><b id="ap-job-title"></b></div>
+        <div id="ap-creds"></div>
+        <pre id="ap-log" class="log" dir="ltr"></pre>
+      </div>
     </section>
 
     <!-- Sites -->
@@ -206,6 +231,6 @@
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

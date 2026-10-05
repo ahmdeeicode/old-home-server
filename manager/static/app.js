@@ -51,7 +51,7 @@ function switchTab(tab) {
   $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== tab));
   history.replaceState(null, "", "#" + tab);
   clearInterval(refreshTimer);
-  ({ dash: loadDash, sites: loadSites, domains: loadAccounts, logs: loadLogSources, settings: loadSettings })[tab]();
+  ({ dash: loadDash, setup: loadSetup, sites: loadSites, domains: loadAccounts, logs: loadLogSources, settings: loadSettings })[tab]();
   if (tab === "dash") refreshTimer = setInterval(loadDash, 5000);
 }
 $$("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
@@ -90,6 +90,33 @@ document.addEventListener("click", async (e) => {
     catch (err) { toast(err.message, true); }
   });
 });
+
+// ---------- setup ----------
+async function loadSetup() {
+  let r;
+  try { r = await api("/api/setup"); } catch (e) { return toast(e.message, true); }
+  const ap = r.aapanel, job = r.job;
+  $("#ap-installed").hidden = !ap.installed;
+  $("#ap-form").hidden = ap.installed || job.state === "running";
+  if (ap.installed) { $("#ap-ver").textContent = ap.version ? "· " + ap.version : ""; $("#ap-lan").href = ap.lan_url; $("#ap-lan").textContent = ap.lan_url; }
+  $("#ap-job").hidden = job.state === "none";
+  if (job.state !== "none") {
+    $("#ap-job-title").innerHTML = job.state === "running" ? `<span class="dot warn"></span>جارِ تثبيت aaPanel… (5–10 دقائق — يمكنك إغلاق الصفحة والعودة)`
+      : job.state === "done" ? `<span class="dot ok"></span>اكتمل التثبيت` : `<span class="dot"></span>فشل التثبيت — راجع السجل`;
+    const c = job.credentials || {};
+    $("#ap-creds").innerHTML = job.state === "done" && c.username
+      ? `<p><b>بيانات دخول aaPanel — احفظها الآن:</b></p><div class="creds">URL: ${esc(ap.lan_url || "")}<br>User: ${esc(c.username)}<br>Pass: ${esc(c.password || "")}</div>` : "";
+    const pre = $("#ap-log"), atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+    pre.textContent = job.log || "…";
+    if (atEnd) pre.scrollTop = pre.scrollHeight;
+  }
+  if (job.state === "running") refreshTimer = setTimeout(() => { if (!$('[data-pane="setup"]').hidden) loadSetup(); }, 3000);
+}
+$("#ap-go").addEventListener("click", (e) => busy(e.target, async () => {
+  $("#ap-err").hidden = true;
+  try { await api("/api/setup/aapanel", { method: "POST", body: { command: $("#ap-cmd").value } }); toast("بدأ التثبيت"); loadSetup(); }
+  catch (err) { $("#ap-err").textContent = err.message; $("#ap-err").hidden = false; }
+}));
 
 // ---------- sites ----------
 let sitesData;
