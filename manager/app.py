@@ -62,11 +62,26 @@ def access_guard():
     return None
 
 
+PW_FILE = os.path.join(ETC, "manager_password.hash")
+
+
+def _pw_hash():
+    with open(PW_FILE) as f:
+        return f.read().strip()
+
+
+def _pw_version():
+    """Changes whenever the password changes → older sessions stop working."""
+    import hashlib
+    return hashlib.sha256(_pw_hash().encode()).hexdigest()[:16]
+
+
 def api(fn):
     """JSON endpoint: requires login, and a custom header on writes (CSRF guard)."""
     @functools.wraps(fn)
     def wrapper(*a, **kw):
-        if not session.get("ok"):
+        if not session.get("ok") or session.get("pwv") != _pw_version():
+            session.clear()
             return jsonify(error="unauthorized"), 401
         if request.method != "GET" and request.headers.get("X-OldHome") != "1":
             return jsonify(error="bad request"), 400
@@ -103,11 +118,11 @@ def login():
         wait = int((WINDOW - (now - recent[0])) / 60) + 1
         return jsonify(error="محاولات خاطئة كثيرة — حاول بعد %d دقيقة" % wait), 429
     pw = (request.get_json(silent=True) or {}).get("password", "")
-    hashed = open(os.path.join(ETC, "manager_password.hash")).read().strip()
-    if check_password_hash(hashed, pw):
+    if check_password_hash(_pw_hash(), pw):
         _fails.pop(ip, None)
         session.clear()
         session["ok"] = True
+        session["pwv"] = _pw_version()
         session.permanent = True
         return jsonify(ok=True)
     recent.append(now)
@@ -123,7 +138,36 @@ def logout():
 
 @app.get("/api/me")
 def me():
-    return jsonify(ok=bool(session.get("ok")))
+    return jsonify(ok=bool(session.get("ok")) and session.get("pwv") == _pw_version())
+
+
+@app.post("/api/settings/password")
+@api
+def change_password():
+    import time
+    from werkzeug.security import generate_password_hash
+    body = request.get_json(silent=True) or {}
+    ip = request.remote_addr or "?"
+    recent = [t for t in _fails.get(ip, []) if time.time() - t < WINDOW]
+    if len(recent) >= MAX_FAILS:
+        raise ValueError("محاولات خاطئة كثيرة — حاول لاحقاً")
+    if not check_password_hash(_pw_hash(), body.get("current", "")):
+        _fails[ip] = recent + [time.time()]
+        raise ValueError("كلمة المرور الحالية غير صحيحة")
+    new = body.get("new", "")
+    if len(new) < 10:
+        raise ValueError("كلمة المرور الجديدة يجب أن تكون 10 أحرف على الأقل")
+    if new != body.get("confirm"):
+        raise ValueError("كلمتا المرور الجديدتان غير متطابقتين")
+    if new == body.get("current"):
+        raise ValueError("اختر كلمة مرور مختلفة عن الحالية")
+    tmp = PW_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.write(fd, generate_password_hash(new).encode())
+    os.close(fd)
+    os.replace(tmp, PW_FILE)
+    session["pwv"] = _pw_version()   # keep THIS session; every other one is now invalid
+    return {"ok": True}
 
 
 # ---------- dashboard ----------

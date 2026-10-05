@@ -379,5 +379,16 @@ $("#realip").addEventListener("change", async (e) => {
   catch (err) { e.target.checked = !want; toast(err.message, true); }
 });
 
+$("#pw-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("#pw-err").hidden = true;
+  const btn = e.submitter;
+  await busy(btn, async () => {
+    try {
+      await api("/api/settings/password", { method: "POST", body: { current: $("#pw-cur").value, new: $("#pw-new").value, confirm: $("#pw-new2").value } });
+      e.target.reset(); toast("تم تغيير كلمة المرور ✓ — الأجهزة الأخرى سُجّل خروجها");
+    } catch (err) { $("#pw-err").textContent = err.message; $("#pw-err").hidden = false; }
+  });
+});
+
 // ---------- boot ----------
 api("/api/me").then((r) => (r.ok ? showApp() : showLogin())).catch(showLogin);

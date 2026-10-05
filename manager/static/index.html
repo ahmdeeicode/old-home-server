@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=7">
+<link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
 
@@ -110,6 +110,15 @@
 
     <!-- Settings -->
     <section data-pane="settings" hidden>
+      <form class="card" id="pw-form" style="margin-bottom:.75rem">
+        <h3>🔑 تغيير كلمة مرور اللوحة</h3>
+        <p class="muted small" style="margin:0">10 أحرف على الأقل. بعد التغيير تُسجَّل كل الأجهزة الأخرى خارج اللوحة تلقائياً.</p>
+        <label>كلمة المرور الحالية <input type="password" id="pw-cur" autocomplete="current-password" required></label>
+        <label>كلمة المرور الجديدة <input type="password" id="pw-new" autocomplete="new-password" minlength="10" required></label>
+        <label>تأكيد الجديدة <input type="password" id="pw-new2" autocomplete="new-password" minlength="10" required></label>
+        <p id="pw-err" class="err" hidden></p>
+        <div class="row end"><button class="btn primary" type="submit">تغيير</button></div>
+      </form>
       <div class="card" style="margin-bottom:.75rem">
         <h3>🌐 فتح اللوحة مباشرة بعنوان الخادم</h3>
         <p class="muted small" style="margin:0 0 .5rem">على المنفذ 8443 عبر HTTPS (أول مرة: Advanced ← Proceed). بعد 5 محاولات دخول خاطئة يُحظر العنوان 15 دقيقة.</p>
@@ -239,6 +248,6 @@
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=7"></script>
+<script src="/static/app.js?v=8"></script>
 </body>
 </html>
