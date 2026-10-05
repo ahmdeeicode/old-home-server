@@ -33,7 +33,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
 // ---------- auth ----------
 function showLogin() { $("#app").hidden = true; $("#login").hidden = false; $("#login-pw").focus(); }
-function showApp() { $("#login").hidden = true; $("#app").hidden = false; switchTab(location.hash.slice(1) || "dash"); }
+function showApp() { $("#login").hidden = true; $("#app").hidden = false; switchTab(location.hash.slice(1) || "dash"); loadVersion(); }
 
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -55,6 +55,7 @@ function switchTab(tab) {
   if (tab === "dash") refreshTimer = setInterval(loadDash, 5000);
 }
 $$("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => switchTab(location.hash.slice(1)));
 
 // ---------- dashboard ----------
 async function loadDash() {
@@ -62,6 +63,7 @@ async function loadDash() {
   try { d = await api("/api/overview"); } catch (e) { return toast(e.message, true); }
   const s = d.stats;
   $("#hostname").textContent = "· " + s.hostname;
+  $("#pw-nag").hidden = !d.default_password;
   const tile = (label, value, sub, p) => `<div class="card stat"><div class="muted small">${label}</div><div class="v">${value}</div>
     <div class="muted small">${sub}</div>${p == null ? "" : `<div class="bar"><i class="${p > 85 ? "hot" : ""}" style="width:${p}%"></i></div>`}</div>`;
   $("#stats").innerHTML =
@@ -401,6 +403,7 @@ $("#log-refresh").addEventListener("click", loadLog);
 
 // ---------- settings ----------
 async function loadSettings() {
+  loadVersion(); loadUpdate();
   try { const d = await api("/api/overview"); $("#realip").checked = d.realip; } catch (e) { toast(e.message, true); }
   try { showDirect(await api("/api/settings/direct")); } catch (e) { toast(e.message, true); }
 }
@@ -433,6 +436,38 @@ $("#pw-form").addEventListener("submit", async (e) => {
     } catch (err) { $("#pw-err").textContent = err.message; $("#pw-err").hidden = false; }
   });
 });
+
+// ---------- version / update ----------
+let verInfo = null;
+async function loadVersion() {
+  try { verInfo = await api("/api/version"); } catch (_) { return; }
+  $("#ver").textContent = "v" + verInfo.version + " · " + verInfo.commit;
+  $("#ver").classList.toggle("new", verInfo.update_available);
+  $("#upd-nag").hidden = !verInfo.update_available;
+  $("#upd-info").textContent = `الإصدار الحالي: ${verInfo.version} (${verInfo.commit}، ${verInfo.date}) — ` +
+    (verInfo.update_available ? `يتوفر تحديث (${verInfo.remote})` : verInfo.remote ? "أحدث إصدار ✓" : "تعذّر التحقق من GitHub");
+}
+async function loadUpdate() {
+  let st;
+  try { st = await api("/api/update"); } catch (_) { return; }
+  const pre = $("#upd-log");
+  pre.hidden = st.state === "none";
+  pre.textContent = st.log; pre.scrollTop = pre.scrollHeight;
+  if (st.state === "running") setTimeout(() => { if (!$('[data-pane="settings"]').hidden) loadUpdate(); }, 2500);
+  if (st.state === "done") loadVersion();
+}
+$("#upd-go").addEventListener("click", (e) => busy(e.target, async () => {
+  try { await api("/api/update", { method: "POST" }); toast("بدأ التحديث — ستُعاد اللوحة تلقائياً"); loadUpdate(); waitBack(); }
+  catch (err) { toast(err.message, true); }
+}));
+function waitBack() {   // install.sh restarts the manager; poll until it answers again
+  let tries = 0;
+  const t = setInterval(async () => {
+    tries++;
+    try { await api("/api/update"); loadUpdate(); if (tries > 3) { clearInterval(t); loadVersion(); } } catch (_) {}
+    if (tries > 60) clearInterval(t);
+  }, 3000);
+}
 
 // ---------- boot ----------
 api("/api/me").then((r) => (r.ok ? showApp() : showLogin())).catch(showLogin);

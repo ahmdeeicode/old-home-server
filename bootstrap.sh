@@ -4,7 +4,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/ahmdeeicode/old-home-server/main/bootstrap.sh | sudo bash
 #
 # 1. makes sure SSH is installed and running
-# 2. enables the root account (asks you for its password) and allows root SSH login
+# 2. enables the root account (asks you for its password) and allows root SSH login,
+#    protected by fail2ban (5 wrong passwords → 1 hour ban)
 # 3. installs the Old-Home manager (aaPanel is installed later from the manager's
 #    "التثبيت" page by pasting the official aaPanel command)
 #
@@ -65,6 +66,29 @@ if sshd -t 2>/tmp/sshd-check.txt; then
 else
   rm -f "$SSHD_DROPIN"
   die "إعداد SSH غير صالح، تم التراجع: $(cat /tmp/sshd-check.txt)"
+fi
+
+step "حماية SSH من التخمين (fail2ban)"
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fail2ban >/dev/null
+# 5 wrong passwords within 10 min → that IP is banned for 1 hour.
+# 127.0.0.1 is ignored: SSH over a Cloudflare tunnel arrives from localhost.
+cat > /etc/fail2ban/jail.d/oldhome-sshd.local <<'JAIL'
+# Added by Old-Home bootstrap
+[sshd]
+enabled  = true
+backend  = systemd
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+ignoreip = 127.0.0.1/8 ::1
+JAIL
+systemctl enable fail2ban >/dev/null 2>&1
+systemctl restart fail2ban
+sleep 2
+if fail2ban-client status sshd >/dev/null 2>&1; then
+  ok "fail2ban يحمي SSH (5 محاولات خاطئة ← حظر ساعة)"
+else
+  echo "    ⚠ fail2ban لم يبدأ — راجع: journalctl -u fail2ban"
 fi
 
 step "تنزيل Old-Home"

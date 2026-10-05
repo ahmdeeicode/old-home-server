@@ -121,3 +121,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .dlg h4 { margin: 1rem 0 .4rem; font-size: .9rem; }
 .dlg code { background: var(--bg); padding: 0 .3rem; border-radius: 4px; }
 #msg-dlg { width: min(640px, calc(100vw - 32px)); }
+
+.nag { margin-bottom: .75rem; border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--card)); }
+.nag.ok { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--card)); }
+.nag a, #ver { color: var(--primary); text-decoration: none; }
+#ver { margin-inline-start: .4rem; font-size: .72rem; }
+#ver.new::after { content: " •"; color: var(--bad); }

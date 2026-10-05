@@ -105,6 +105,7 @@ NEW_PW=""
 if [ ! -f /etc/oldhome/manager_password.hash ]; then
   NEW_PW=$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')
   (cd "$DIR/manager" && OLDHOME_PASSWORD="$NEW_PW" python3 cli.py set-password >/dev/null)
+  touch /etc/oldhome/password_is_default   # UI nags until it is changed
 fi
 
 step "Manager service"

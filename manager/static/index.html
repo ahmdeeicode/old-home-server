@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=13">
+<link rel="stylesheet" href="/static/style.css?v=14">
 </head>
 <body>
 
@@ -20,7 +20,8 @@
 
 <div id="app" hidden>
   <header class="top">
-    <div class="brand">🏠 <b>Old-Home</b> <span id="hostname" class="muted"></span></div>
+    <div class="brand">🏠 <b>Old-Home</b> <span id="hostname" class="muted"></span>
+      <a id="ver" class="tag" href="#settings" title="الإصدار"></a></div>
     <nav id="tabs">
       <button data-tab="dash" class="on">الرئيسية</button>
       <button data-tab="setup">التثبيت</button>
@@ -35,6 +36,9 @@
   <main>
     <!-- Dashboard -->
     <section data-pane="dash">
+      <div id="pw-nag" class="card nag" hidden>⚠️ ما زلت تستخدم كلمة مرور اللوحة التي وُلّدت عند التثبيت —
+        <a href="#settings">غيّرها من الإعدادات</a>.</div>
+      <div id="upd-nag" class="card nag ok" hidden>🔄 يتوفر تحديث جديد للوحة — <a href="#settings">التحديث من الإعدادات</a>.</div>
       <div class="grid stats" id="stats"></div>
       <h2>الخدمات</h2>
       <div class="grid" id="services"></div>
@@ -110,6 +114,11 @@
 
     <!-- Settings -->
     <section data-pane="settings" hidden>
+      <div class="card" style="margin-bottom:.75rem">
+        <div class="svc"><h3 style="margin:0">🔄 تحديث اللوحة</h3><button class="btn primary" id="upd-go">تحديث الآن</button></div>
+        <p class="muted small" id="upd-info" style="margin:.4rem 0 0"></p>
+        <pre id="upd-log" class="log" dir="ltr" hidden></pre>
+      </div>
       <form class="card" id="pw-form" style="margin-bottom:.75rem">
         <h3>🔑 تغيير كلمة مرور اللوحة</h3>
         <p class="muted small" style="margin:0">10 أحرف على الأقل. بعد التغيير تُسجَّل كل الأجهزة الأخرى خارج اللوحة تلقائياً.</p>
@@ -252,6 +261,6 @@
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=13"></script>
+<script src="/static/app.js?v=14"></script>
 </body>
 </html>

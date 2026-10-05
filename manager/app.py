@@ -7,7 +7,7 @@ import secrets
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
 
-from core import aapanel, access, accounts, cf, direct, installer, state, system
+from core import aapanel, access, accounts, cf, direct, installer, state, system, updater
 
 ETC = state.ETC
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +32,8 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict"
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
 DIRECT = os.environ.get("OLDHOME_DIRECT") == "1"   # the 0.0.0.0:8443 HTTPS listener
+if DIRECT:
+    app.config["SESSION_COOKIE_SECURE"] = True       # that listener is HTTPS-only
 
 
 @app.before_request
@@ -176,6 +178,10 @@ def change_password():
     os.write(fd, generate_password_hash(new).encode())
     os.close(fd)
     os.replace(tmp, PW_FILE)
+    try:
+        os.unlink(os.path.join(ETC, "password_is_default"))
+    except OSError:
+        pass
     session["pwv"] = _pw_version()   # keep THIS session; every other one is now invalid
     return {"ok": True}
 
@@ -192,7 +198,8 @@ def overview():
         tunnels.append({"account": name, "tunnel": acct["tunnel_name"],
                         "zones": [z for z, v in data["zones"].items() if v["account"] == name], **st})
     return {"stats": system.stats(), "services": system.services(), "tunnels": tunnels,
-            "realip": system.realip_enabled()}
+            "realip": system.realip_enabled(),
+            "default_password": os.path.exists(os.path.join(ETC, "password_is_default"))}
 
 
 @app.post("/api/services/<sid>/restart")
@@ -487,6 +494,26 @@ def setup_status():
 @api
 def setup_aapanel():
     return installer.start((request.get_json(silent=True) or {}).get("command", ""))
+
+
+# ---------- version / self-update ----------
+
+@app.get("/api/version")
+@api
+def version_info():
+    return updater.version()
+
+
+@app.get("/api/update")
+@api
+def update_status():
+    return updater.status()
+
+
+@app.post("/api/update")
+@api
+def update_start():
+    return updater.start()
 
 
 # ---------- logs & settings ----------

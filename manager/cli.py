@@ -4,6 +4,9 @@
   python3 cli.py set-password   # set (or reset) the manager login password
   python3 cli.py apply          # regenerate every tunnel config from state.json and restart
   python3 cli.py direct [off|lan|public|auto]   # direct HTTPS access by IP on :8443
+  python3 cli.py plan-cloud     # list what uninstall --full would remove in Cloudflare
+  python3 cli.py remove-cloud   # uninstall --full: delete OUR DNS records + tunnels
+  python3 cli.py drop-manager-links  # uninstall: remove links that open the manager itself
 """
 import getpass
 import glob
@@ -89,8 +92,58 @@ def cmd_direct():
     print("direct access:", i["mode"], *i["urls"]) if i["mode"] != "off" else print("direct access: off")
 
 
+def _cloud_items():
+    data = state.load()
+    for account, acct in data["accounts"].items():
+        hosts = [r["hostname"] for r in cf.account_routes(data, account)]
+        yield data, account, acct, hosts
+
+
+def cmd_plan_cloud():
+    for _, account, acct, hosts in _cloud_items():
+        print("account %s: tunnel %s (%s)" % (account, acct["tunnel_name"], acct["tunnel_id"]))
+        for h in hosts:
+            print("  DNS %s" % h)
+
+
+def cmd_remove_cloud():
+    import subprocess
+    for data, account, acct, hosts in _cloud_items():
+        for h in hosts:
+            try:
+                print("  DNS %-40s %s" % (h, "deleted" if cf.dns_delete(data, h) else "skipped (not ours / absent)"))
+            except Exception as e:
+                print("  DNS %-40s ERROR %s" % (h, e))
+        subprocess.run(["systemctl", "disable", "--now", "cloudflared@%s" % account], capture_output=True)
+        base = ["cloudflared", "--origincert", acct["cert"], "tunnel"]
+        subprocess.run(base + ["cleanup", acct["tunnel_id"]], capture_output=True)
+        r = subprocess.run(base + ["delete", "-f", acct["tunnel_id"]], capture_output=True, text=True)
+        print("  tunnel %s: %s" % (acct["tunnel_name"], "deleted" if r.returncode == 0 else
+                                    "NOT deleted — " + (r.stderr or r.stdout).strip()[-200:]))
+
+
+def cmd_drop_manager_links():
+    data = state.load()
+    links = [r for r in data["routes"] if r.get("kind") == "manager"]
+    touched = set()
+    for r in links:
+        data["routes"].remove(r)
+        touched.add(data["zones"][state.zone_for(data, r["hostname"])]["account"])
+    state.save(data)
+    for account in touched:
+        cf.apply_config(data, account)
+    for r in links:
+        try:
+            cf.dns_delete(data, r["hostname"])
+        except Exception as e:
+            print("  DNS %s: %s" % (r["hostname"], e))
+        print("  removed manager link %s" % r["hostname"])
+
+
 if __name__ == "__main__":
-    cmds = {"import": cmd_import, "set-password": cmd_set_password, "apply": cmd_apply, "direct": cmd_direct}
+    cmds = {"import": cmd_import, "set-password": cmd_set_password, "apply": cmd_apply, "direct": cmd_direct,
+            "plan-cloud": cmd_plan_cloud, "remove-cloud": cmd_remove_cloud,
+            "drop-manager-links": cmd_drop_manager_links}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds:
         print(__doc__)
         sys.exit(1)

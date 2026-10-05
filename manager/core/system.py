@@ -91,6 +91,9 @@ def services():
         {"id": "mysqld", "name": "MySQL / MariaDB", "ok": _port_open(3306)},
         {"id": "ssh", "name": "SSH", "ok": _port_open(22)},
     ]
+    if os.path.exists("/etc/fail2ban/jail.d/oldhome-sshd.local"):
+        f2b = subprocess.run(["systemctl", "is-active", "--quiet", "fail2ban"]).returncode == 0
+        out.append({"id": "fail2ban", "name": "fail2ban (حماية SSH)", "ok": f2b})
     for d in sorted(glob.glob("/www/server/php/[0-9][0-9]")):
         v = os.path.basename(d)
         out.append({"id": "php-fpm-" + v, "name": "PHP %s.%s" % (v[0], v[1]),
@@ -99,7 +102,8 @@ def services():
 
 
 RESTARTABLE = {
-    "aapanel": ["/etc/init.d/bt", "restart"],
+    "fail2ban": ["systemctl", "restart", "fail2ban"],
+    "aapanel": ["systemctl", "restart", "btpanel"],
     "nginx": ["/etc/init.d/nginx", "reload"],
     "mysqld": ["/etc/init.d/mysqld", "restart"],
 }
