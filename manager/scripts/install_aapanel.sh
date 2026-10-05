@@ -26,6 +26,11 @@ echo running > "$STATUS"
     btpython "$HERE/enable_aapanel_api.py"
     # Hand aaPanel over to its own systemd service (btpanel) so it lives in
     # its own cgroup — not this transient installer unit — and starts on boot.
+    # aaPanel's installer enables ufw with only its own ports — re-assert the
+    # manager's :8443 rule for the current direct-access mode.
+    if [ -f /etc/oldhome/direct.json ]; then
+      (cd "$HERE/.." && python3 cli.py direct "$(python3 -c 'import json;print(json.load(open("/etc/oldhome/direct.json"))["mode"])')")
+    fi
     if systemctl cat btpanel >/dev/null 2>&1; then
       echo "== starting aaPanel via its service (btpanel)"
       systemctl enable btpanel >/dev/null 2>&1

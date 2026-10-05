@@ -86,13 +86,14 @@ WantedBy=multi-user.target
     subprocess.run(["systemctl", "daemon-reload"], check=True)
 
 
-def _ufw_active():
-    r = subprocess.run(["ufw", "status"], capture_output=True, text=True)
-    return r.returncode == 0 and "Status: active" in r.stdout
+def _ufw_present():
+    return subprocess.run(["which", "ufw"], capture_output=True).returncode == 0
 
 
 def _ufw(m):
-    if not _ufw_active():
+    # Add rules even while ufw is inactive: they are stored and take effect the
+    # moment something enables it (the aaPanel installer does exactly that).
+    if not _ufw_present():
         return
     rules = [["allow", "from", n, "to", "any", "port", str(PORT), "proto", "tcp"] for n in LAN_NETS]
     public = ["allow", "%d/tcp" % PORT]
