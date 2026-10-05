@@ -243,7 +243,7 @@ async function loadServerRoutes() {
   const tb = $("#sr-table tbody");
   try {
     const r = await api("/api/server-routes");
-    srZones = r.zones;
+    srZones = r.zones; srPanel = r.aapanel;
     tb.innerHTML = r.routes.map((x) => {
       const href = x.kind === "ssh" ? "" : `https://${x.hostname}${x.kind === "panel" ? x.admin_path : "/"}`;
       const link = href ? `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr">${esc(x.hostname)}</a>` : `<span dir="ltr">${esc(x.hostname)}</span>`;
@@ -253,7 +253,7 @@ async function loadServerRoutes() {
     }).join("") || `<tr><td colspan="4" class="muted">لا توجد روابط — أضف رابطاً للوحة aaPanel أو SSH.</td></tr>`;
   } catch (e) { tb.innerHTML = ""; toast(e.message, true); }
 }
-let srZones = [];
+let srZones = [], srPanel = false;
 const srHost = () => $("#sr-sub").value.trim().toLowerCase() + "." + $("#sr-zone").value;
 function srUpdate() {
   const k = $("#sr-kind").value;
@@ -268,6 +268,10 @@ $("#open-sr").addEventListener("click", () => {
   if (!srZones.length) return toast("اربط دوميناً أولاً", true);
   $("#sr-form").reset(); $("#sr-err").hidden = true;
   $("#sr-zone").innerHTML = srZones.map((z) => `<option>${esc(z)}</option>`).join("");
+  const po = $('#sr-kind option[value="panel"]');
+  po.disabled = !srPanel;
+  po.textContent = srPanel ? "لوحة aaPanel" : "لوحة aaPanel (غير مثبّت بعد)";
+  $("#sr-kind").value = srPanel ? "panel" : "ssh";
   srUpdate(); $("#sr-dlg").showModal(); $("#sr-sub").focus();
 });
 ["input", "change"].forEach((ev) => ["#sr-kind", "#sr-sub", "#sr-zone"].forEach((id) => $(id).addEventListener(ev, srUpdate)));

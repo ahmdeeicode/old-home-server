@@ -408,7 +408,7 @@ def server_routes():
              "password_only": bool(r.get("password_only")),
              "admin_path": system.panel_admin_path() if r["kind"] == "panel" else ""}
             for r in data["routes"] if r.get("kind") in SERVER_KINDS]
-    return {"routes": rows, "zones": sorted(data["zones"])}
+    return {"routes": rows, "zones": sorted(data["zones"]), "aapanel": bool(system.panel_port())}
 
 
 @app.post("/api/server-routes")
