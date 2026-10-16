@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Old-Home</title>
-<link rel="stylesheet" href="/static/style.css?v=15">
+<link rel="stylesheet" href="/static/style.css?v=16">
 </head>
 <body>
 
@@ -94,7 +94,10 @@
 
       <div class="row between">
         <h2>روابط هذا الخادم</h2>
-        <button class="btn" id="open-sr">➕ إضافة رابط</button>
+        <div class="row">
+          <button class="btn" id="open-sug">✨ روابط مقترحة</button>
+          <button class="btn" id="open-sr">➕ إضافة رابط</button>
+        </div>
       </div>
       <div class="card table-wrap"><table id="sr-table">
         <thead><tr><th>الرابط</th><th>يفتح</th><th>الحساب</th><th></th></tr></thead>
@@ -257,11 +260,25 @@
   </form>
 </dialog>
 
+<dialog id="sug-dlg">
+  <form id="sug-form" method="dialog" class="dlg">
+    <h3>✨ روابط مقترحة لهذا الخادم</h3>
+    <p class="small muted">اختر ما تريد فتحه من خارج البيت — يمكنك تغيير الاسم أو حذف الرابط لاحقاً.</p>
+    <label>الدومين <select id="sug-zone"></select></label>
+    <div id="sug-list"></div>
+    <p id="sug-err" class="err" hidden></p>
+    <div class="row end">
+      <button type="button" class="btn ghost" data-close>ليس الآن</button>
+      <button type="submit" class="btn primary" id="sug-go">إضافة المحدد</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Result dialog -->
 <dialog id="msg-dlg"><div class="dlg"><div id="msg-body"></div>
   <div class="row end"><button class="btn primary" data-close>تم</button></div></div></dialog>
 
 <div id="toast" hidden></div>
-<script src="/static/app.js?v=15"></script>
+<script src="/static/app.js?v=16"></script>
 </body>
 </html>

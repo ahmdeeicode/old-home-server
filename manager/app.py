@@ -3,6 +3,7 @@ import functools
 import os
 import re
 import secrets
+import socket
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash
@@ -420,53 +421,119 @@ def server_routes():
             "pma": bool(system.pma_port())}
 
 
+def _build_server_route(data, kind, h, protection=None):
+    """Validate + create DNS for one server link. Caller appends, saves and applies."""
+    if kind not in SERVER_KINDS:
+        raise ValueError("نوع غير معروف")
+    zone = state.zone_for(data, h)
+    if not zone:
+        raise ValueError("الدومين %s لا يتبع أي حساب Cloudflare مربوط" % h)
+    if state.find_route(data, h):
+        raise ValueError("هذا الرابط مستخدم مسبقاً على هذا الخادم")
+    route = {"hostname": h, "kind": kind, "label": SERVER_KINDS[kind], "locked": True}
+    if kind == "panel":
+        if not system.panel_port():
+            raise ValueError("aaPanel غير مثبّت بعد — ثبّته من صفحة «التثبيت» ثم أضف رابطه")
+        route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
+    elif kind == "pma":
+        if not system.pma_port():
+            raise ValueError("phpMyAdmin غير مثبّت — ثبّته من aaPanel (App Store) ثم أضف رابطه")
+        route.update(service="http://localhost:%d" % system.pma_port())
+    elif kind == "ssh":
+        route.update(service="ssh://localhost:%d" % _ssh_port())
+    elif protection == "password":
+        # owner's explicit choice: no Access, password + per-IP throttling only
+        route.update(service="http://localhost:%d" % MANAGER_PORT, password_only=True)
+    else:
+        # DNS first, NO ingress yet: the manager must stay unreachable
+        # unless Cloudflare Access is demonstrably in front of it.
+        status, _ = cf.dns_lookup(data, h)
+        cf.dns_create(data, h)
+        pr = access.probe(h, neighbours=[r["hostname"] for r in data["routes"]
+                                         if state.zone_for(data, r["hostname"]) == zone] + [zone])
+        if not pr["protected"]:
+            if status == "free":
+                cf.dns_delete(data, h)
+            raise ValueError("لم يُفتح الرابط: Cloudflare Access لا يحمي %s بعد (%s). "
+                             "أنشئ تطبيق Access لهذا الرابط أولاً ثم أعد المحاولة." % (h, pr["detail"]))
+        route.update(service="http://localhost:%d" % MANAGER_PORT,
+                     access={"team": pr["team"], "aud": pr["aud"]})
+    cf.dns_create(data, h)
+    return route
+
+
 @app.post("/api/server-routes")
 @api
 def add_server_route():
     body = request.get_json(silent=True) or {}
-    kind, h = body.get("kind"), _host(body.get("hostname"))
-    if kind not in SERVER_KINDS:
-        raise ValueError("نوع غير معروف")
+    h = _host(body.get("hostname"))
     with state.LOCK:
         data = state.load()
-        zone = state.zone_for(data, h)
-        if not zone:
-            raise ValueError("الدومين %s لا يتبع أي حساب Cloudflare مربوط" % h)
-        if state.find_route(data, h):
-            raise ValueError("هذا الرابط مستخدم مسبقاً على هذا الخادم")
-        route = {"hostname": h, "kind": kind, "label": SERVER_KINDS[kind], "locked": True}
-        if kind == "panel":
-            if not system.panel_port():
-                raise ValueError("aaPanel غير مثبّت بعد — ثبّته من صفحة «التثبيت» ثم أضف رابطه")
-            route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
-        elif kind == "pma":
-            if not system.pma_port():
-                raise ValueError("phpMyAdmin غير مثبّت — ثبّته من aaPanel (App Store) ثم أضف رابطه")
-            route.update(service="http://localhost:%d" % system.pma_port())
-        elif kind == "ssh":
-            route.update(service="ssh://localhost:%d" % _ssh_port())
-        elif body.get("protection") == "password":
-            # owner's explicit choice: no Access, password + per-IP throttling only
-            route.update(service="http://localhost:%d" % MANAGER_PORT, password_only=True)
-        else:
-            # DNS first, NO ingress yet: the manager must stay unreachable
-            # unless Cloudflare Access is demonstrably in front of it.
-            status, _ = cf.dns_lookup(data, h)
-            cf.dns_create(data, h)
-            pr = access.probe(h, neighbours=[r["hostname"] for r in data["routes"]
-                                             if state.zone_for(data, r["hostname"]) == zone] + [zone])
-            if not pr["protected"]:
-                if status == "free":
-                    cf.dns_delete(data, h)
-                raise ValueError("لم يُفتح الرابط: Cloudflare Access لا يحمي %s بعد (%s). "
-                                 "أنشئ تطبيق Access لهذا الرابط أولاً ثم أعد المحاولة." % (h, pr["detail"]))
-            route.update(service="http://localhost:%d" % MANAGER_PORT,
-                         access={"team": pr["team"], "aud": pr["aud"]})
-        cf.dns_create(data, h)
+        route = _build_server_route(data, body.get("kind"), h, body.get("protection"))
         data["routes"].append(route)
         state.save(data)
-        cf.apply_config(data, data["zones"][zone]["account"])
+        cf.apply_config(data, data["zones"][state.zone_for(data, h)]["account"])
     return {"ok": True, "url": "https://" + h}
+
+
+# Links offered in one click after a domain is linked (never the manager
+# itself — that one needs Cloudflare Access set up first).
+SUGGEST_PREFIX = {"panel": "panel", "ssh": "ssh", "pma": "pma"}
+
+
+def _host_slug():
+    return re.sub(r"[^a-z0-9-]", "", socket.gethostname().split(".")[0].lower()).strip("-") or "server"
+
+
+@app.get("/api/server-routes/suggest")
+@api
+def suggest_server_routes():
+    data = state.load()
+    zone = request.args.get("zone", "")
+    if zone not in data["zones"]:
+        raise ValueError("دومين غير مربوط")
+    have = {r.get("kind") for r in data["routes"]}
+    avail = {"panel": bool(system.panel_port()), "ssh": True, "pma": bool(system.pma_port())}
+    out = []
+    for kind, prefix in SUGGEST_PREFIX.items():
+        if kind in have:
+            continue
+        sub = "%s-%s" % (prefix, _host_slug())
+        status = "unknown"
+        try:
+            status, _ = cf.dns_lookup(data, "%s.%s" % (sub, zone))
+        except Exception:
+            pass
+        out.append({"kind": kind, "label": SERVER_KINDS[kind], "sub": sub,
+                    "available": avail[kind], "dns": status})
+    return {"zone": zone, "items": out}
+
+
+@app.post("/api/server-routes/bulk")
+@api
+def add_server_routes_bulk():
+    body = request.get_json(silent=True) or {}
+    zone = body.get("zone", "")
+    results, added = [], 0
+    with state.LOCK:
+        data = state.load()
+        if zone not in data["zones"]:
+            raise ValueError("دومين غير مربوط")
+        for it in body.get("items") or []:
+            kind = it.get("kind")
+            try:
+                if kind not in SUGGEST_PREFIX:
+                    raise ValueError("نوع غير مسموح هنا")
+                h = _host("%s.%s" % (str(it.get("sub", "")).strip().lower(), zone))
+                data["routes"].append(_build_server_route(data, kind, h))
+                added += 1
+                results.append({"kind": kind, "ok": True, "url": "https://" + h})
+            except (cf.CFError, ValueError) as e:
+                results.append({"kind": kind, "ok": False, "error": str(e)})
+        if added:
+            state.save(data)
+            cf.apply_config(data, data["zones"][zone]["account"])   # one tunnel restart for all
+    return {"results": results, "added": added}
 
 
 @app.delete("/api/server-routes/<hostname>")

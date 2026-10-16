@@ -327,6 +327,61 @@ $("#sr-form").addEventListener("submit", async (e) => {
   });
   btn.textContent = label;
 });
+// ----- one-click suggested links (aaPanel / SSH / phpMyAdmin) -----
+const SUG_HINT = { panel: "لوحة aaPanel", ssh: "الدخول للخادم عبر SSH", pma: "إدارة قواعد البيانات" };
+async function loadSuggest(zone) {
+  const box = $("#sug-list");
+  box.innerHTML = `<p class="muted small">جارِ الفحص…</p>`;
+  const r = await api("/api/server-routes/suggest?zone=" + encodeURIComponent(zone));
+  box.innerHTML = r.items.map((x) => {
+    const why = !x.available ? "غير مثبّت بعد" : x.dns === "foreign" ? "الاسم مستخدم في Cloudflare — غيّره" : "";
+    const on = x.available && x.dns !== "foreign";
+    return `<div class="card" style="margin:.5rem 0;padding:.6rem .8rem">
+      <label class="check"><input type="checkbox" data-sug="${x.kind}" ${on ? "checked" : ""} ${x.available ? "" : "disabled"}>
+        <b>${esc(x.label)}</b> <span class="muted small">— ${SUG_HINT[x.kind]}${why ? " · ⚠️ " + why : ""}</span></label>
+      <div class="row nowrap" dir="ltr" style="margin-top:.4rem">
+        <input data-sugsub="${x.kind}" value="${esc(x.sub)}" pattern="[a-zA-Z0-9-]+" style="flex:1;min-width:0" ${x.available ? "" : "disabled"}>
+        <span class="muted">.${esc(zone)}</span></div></div>`;
+  }).join("");
+  return r.items;
+}
+async function openSuggest(zone, auto) {
+  await loadServerRoutes();   // fresh zone list (a domain may have just been linked)
+  if (!srZones.length) return toast("اربط دوميناً أولاً", true);
+  $("#sug-err").hidden = true;
+  $("#sug-zone").innerHTML = srZones.map((z) => `<option ${z === zone ? "selected" : ""}>${esc(z)}</option>`).join("");
+  try {
+    const items = await loadSuggest($("#sug-zone").value);
+    if (!items.length) return auto ? null : toast("كل الروابط المقترحة مضافة مسبقاً ✓");
+    if (auto && !items.some((x) => x.available)) return;
+    $("#sug-dlg").showModal();
+  } catch (e) { toast(e.message, true); }
+}
+$("#open-sug").addEventListener("click", () => openSuggest("", false));
+$("#sug-zone").addEventListener("change", () => loadSuggest($("#sug-zone").value).catch((e) => toast(e.message, true)));
+$("#sug-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("#sug-err").hidden = true;
+  const items = $$("[data-sug]").filter((c) => c.checked)
+    .map((c) => ({ kind: c.dataset.sug, sub: $(`[data-sugsub="${c.dataset.sug}"]`).value.trim() }));
+  if (!items.length) return $("#sug-dlg").close();
+  const btn = $("#sug-go"), label = btn.textContent;
+  btn.textContent = "جارِ الإضافة…";
+  await busy(btn, async () => {
+    try {
+      const r = await api("/api/server-routes/bulk", { method: "POST", body: { zone: $("#sug-zone").value, items } });
+      const bad = r.results.filter((x) => !x.ok);
+      if (bad.length) {
+        $("#sug-err").innerHTML = bad.map((x) => `${esc(KIND[x.kind] || x.kind)}: ${esc(x.error)}`).join("<br>");
+        $("#sug-err").hidden = false;
+        await loadSuggest($("#sug-zone").value);
+      } else $("#sug-dlg").close();
+      if (r.added) toast(`أُضيف ${r.added} رابط — تعمل خلال ~30 ثانية (إعادة تشغيل التونل)`);
+      loadServerRoutes();
+    } catch (err) { $("#sug-err").textContent = err.message; $("#sug-err").hidden = false; }
+  });
+  btn.textContent = label;
+});
+
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-srdel]");
   if (!b) return;
@@ -377,6 +432,7 @@ $("#link-finish").addEventListener("click", (e) => busy(e.target, async () => {
     $("#link-dlg").close();
     toast(`تم ربط ${r.zone}` + (r.new_account ? ` (حساب جديد: ${r.account})` : ""));
     loadAccounts();
+    openSuggest(r.zone, true);
   } catch (err) { $("#link-err").textContent = err.message; $("#link-err").hidden = false; }
 }));
 async function cancelLink() { clearInterval(linkPoll); await api("/api/accounts/cancel", { method: "POST" }).catch(() => {}); $("#link-dlg").close(); }
