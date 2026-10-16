@@ -122,7 +122,7 @@ $("#ap-go").addEventListener("click", (e) => busy(e.target, async () => {
 
 // ---------- sites ----------
 let sitesData;
-const KIND = { site: "موقع", panel: "اللوحة", ssh: "SSH", manager: "المدير" };
+const KIND = { site: "موقع", panel: "اللوحة", pma: "phpMyAdmin", ssh: "SSH", manager: "المدير" };
 
 async function loadSites() {
   const tb = $("#sites-table tbody");
@@ -245,9 +245,9 @@ async function loadServerRoutes() {
   const tb = $("#sr-table tbody");
   try {
     const r = await api("/api/server-routes");
-    srZones = r.zones; srPanel = r.aapanel;
+    srZones = r.zones; srPanel = r.aapanel; srPma = r.pma;
     tb.innerHTML = r.routes.map((x) => {
-      const href = x.kind === "ssh" ? "" : `https://${x.hostname}${x.kind === "panel" ? x.admin_path : "/"}`;
+      const href = x.kind === "ssh" ? "" : `https://${x.hostname}${x.admin_path || "/"}`;
       const link = href ? `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr">${esc(x.hostname)}</a>` : `<span dir="ltr">${esc(x.hostname)}</span>`;
       const prot = x.kind === "manager" ? (x.protected ? " 🛡️" : x.password_only ? " 🔑" : " ⚠️") : "";
       return `<tr><td>${link}${prot}</td><td>${esc(x.label)}</td><td>${esc(x.account || "—")}</td>
@@ -255,7 +255,7 @@ async function loadServerRoutes() {
     }).join("") || `<tr><td colspan="4" class="muted">لا توجد روابط — أضف رابطاً للوحة aaPanel أو SSH.</td></tr>`;
   } catch (e) { tb.innerHTML = ""; toast(e.message, true); }
 }
-let srZones = [], srPanel = false;
+let srZones = [], srPanel = false, srPma = false;
 
 // ----- "how to connect" for an SSH link -----
 const copyBox = (text) => `<div class="copy"><pre dir="ltr">${esc(text)}</pre><button type="button" class="btn small" data-copy="${esc(text)}">نسخ</button></div>`;
@@ -296,7 +296,8 @@ function srUpdate() {
   $("#sr-access").hidden = !(k === "manager" && prot === "access");
   $("#sr-host-hint").textContent = srHost();
   $("#sr-warn").textContent = k === "ssh" ? "للاتصال: cloudflared access ssh --hostname " + srHost()
-    : k === "panel" ? "سيفتح لوحة aaPanel مع مسار الدخول الأمني." : "";
+    : k === "panel" ? "سيفتح لوحة aaPanel مع مسار الدخول الأمني."
+    : k === "pma" ? "الدخول باسم مستخدم قاعدة البيانات وكلمة مرورها (من aaPanel ← Databases)." : "";
 }
 $("#open-sr").addEventListener("click", () => {
   if (!srZones.length) return toast("اربط دوميناً أولاً", true);
@@ -305,6 +306,9 @@ $("#open-sr").addEventListener("click", () => {
   const po = $('#sr-kind option[value="panel"]');
   po.disabled = !srPanel;
   po.textContent = srPanel ? "لوحة aaPanel" : "لوحة aaPanel (غير مثبّت بعد)";
+  const pm = $('#sr-kind option[value="pma"]');
+  pm.disabled = !srPma;
+  pm.textContent = srPma ? "phpMyAdmin" : "phpMyAdmin (غير مثبّت)";
   $("#sr-kind").value = srPanel ? "panel" : "ssh";
   srUpdate(); $("#sr-dlg").showModal(); $("#sr-sub").focus();
 });

@@ -83,6 +83,21 @@ def panel_admin_path():
         return ""
 
 
+def pma_port():
+    """aaPanel's phpMyAdmin (installed with LNMP) — 0 when absent."""
+    if not glob.glob("/www/server/phpmyadmin/phpmyadmin_*/index.php"):
+        return 0
+    try:
+        return int(open("/www/server/phpmyadmin/port.pl").read().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def pma_path():
+    d = sorted(glob.glob("/www/server/phpmyadmin/phpmyadmin_*/"))
+    return "/" + os.path.basename(d[0].rstrip("/")) + "/" if d else "/"
+
+
 def services():
     out = [
         {"id": "aapanel", "name": "aaPanel" if panel_port() else "aaPanel (غير مثبّت)",

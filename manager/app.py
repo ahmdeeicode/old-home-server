@@ -393,7 +393,7 @@ def accounts_cancel():
 # ---------- server routes: aaPanel / SSH / this manager ----------
 
 MANAGER_PORT = int(os.environ.get("OLDHOME_PORT", "8800"))
-SERVER_KINDS = {"panel": "aaPanel", "ssh": "SSH", "manager": "Old-Home"}
+SERVER_KINDS = {"panel": "aaPanel", "pma": "phpMyAdmin", "ssh": "SSH", "manager": "Old-Home"}
 
 
 def _ssh_port():
@@ -413,9 +413,11 @@ def server_routes():
              "account": data["zones"].get(state.zone_for(data, r["hostname"]) or "", {}).get("account"),
              "protected": bool(r.get("access")) if r["kind"] == "manager" else None,
              "password_only": bool(r.get("password_only")),
-             "admin_path": system.panel_admin_path() if r["kind"] == "panel" else ""}
+             "admin_path": system.panel_admin_path() if r["kind"] == "panel"
+                           else system.pma_path() if r["kind"] == "pma" else ""}
             for r in data["routes"] if r.get("kind") in SERVER_KINDS]
-    return {"routes": rows, "zones": sorted(data["zones"]), "aapanel": bool(system.panel_port())}
+    return {"routes": rows, "zones": sorted(data["zones"]), "aapanel": bool(system.panel_port()),
+            "pma": bool(system.pma_port())}
 
 
 @app.post("/api/server-routes")
@@ -437,6 +439,10 @@ def add_server_route():
             if not system.panel_port():
                 raise ValueError("aaPanel غير مثبّت بعد — ثبّته من صفحة «التثبيت» ثم أضف رابطه")
             route.update(service="https://localhost:%d" % system.panel_port(), no_tls_verify=True)
+        elif kind == "pma":
+            if not system.pma_port():
+                raise ValueError("phpMyAdmin غير مثبّت — ثبّته من aaPanel (App Store) ثم أضف رابطه")
+            route.update(service="http://localhost:%d" % system.pma_port())
         elif kind == "ssh":
             route.update(service="ssh://localhost:%d" % _ssh_port())
         elif body.get("protection") == "password":
